@@ -1,0 +1,552 @@
+"use client";
+
+import { useState } from "react";
+import Image from "next/image";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
+import { Camera, Check, ImageOff, Plus, Save, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { CATEGORIES } from "@/data/categories";
+import { API_BASE_URL, parseApiResponse } from "@/lib/api";
+
+/**
+ * Shared studio form for creating a listing (/add-studio) and editing an
+ * existing one (My Listings). Submits to the StudioSpace backend; when the
+ * backend auth integration is not live yet (status 501) failures are shown
+ * honestly — no fake success state.
+ */
+
+const inputClasses =
+  "h-11 w-full rounded-full border border-input bg-card px-5 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-ring disabled:cursor-not-allowed disabled:opacity-60 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20";
+
+const pillInputClasses =
+  "h-11 w-full rounded-2xl border border-input bg-card px-4 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-ring disabled:opacity-60";
+
+const selectClasses =
+  "h-11 w-full appearance-none rounded-full border border-input bg-card px-5 text-sm text-foreground outline-none transition-colors focus:border-ring [color-scheme:light] [&>option]:bg-white [&>option]:text-[#252A24] [&>option:checked]:bg-[#E9E5DB] [&>option:checked]:text-[#252A24]";
+
+interface StudioFormProps {
+  mode: "create" | "edit";
+  /** Required in edit mode — the listing to update. */
+  studioId?: string;
+  initial?: {
+    title?: string;
+    category?: string;
+    location?: string;
+    address?: string;
+    image?: string;
+    overview?: string;
+    hourlyRate?: number;
+    securityDeposit?: number;
+    maxCapacity?: number;
+    amenities?: string[];
+  };
+  /** Session-provided host defaults (create mode only). */
+  hostName?: string;
+  hostEmail?: string;
+  /** Called after a successful edit (lets parents close dialogs / refresh). */
+  onSaved?: () => void;
+}
+
+interface FormState {
+  title: string;
+  category: string;
+  location: string;
+  address: string;
+  image: string;
+  overview: string;
+  hourlyRate: string;
+  securityDeposit: string;
+  maxCapacity: string;
+}
+
+const EMPTY_FORM: FormState = {
+  title: "",
+  category: "",
+  location: "",
+  address: "",
+  image: "",
+  overview: "",
+  hourlyRate: "",
+  securityDeposit: "",
+  maxCapacity: "",
+};
+
+export function StudioForm({
+  mode,
+  studioId,
+  initial,
+  hostName,
+  hostEmail,
+  onSaved,
+}: StudioFormProps) {
+  const router = useRouter();
+  const isEdit = mode === "edit";
+
+  const [form, setForm] = useState<FormState>({
+    ...EMPTY_FORM,
+    title: initial?.title ?? "",
+    category: initial?.category ?? "",
+    location: initial?.location ?? "",
+    address: initial?.address ?? "",
+    image: initial?.image ?? "",
+    overview: initial?.overview ?? "",
+    hourlyRate: initial?.hourlyRate !== undefined ? String(initial.hourlyRate) : "",
+    securityDeposit:
+      initial?.securityDeposit !== undefined ? String(initial.securityDeposit) : "",
+    maxCapacity: initial?.maxCapacity !== undefined ? String(initial.maxCapacity) : "",
+  });
+  const [hostNameValue, setHostNameValue] = useState(hostName ?? "");
+  const [amenities, setAmenities] = useState<string[]>(initial?.amenities ?? []);
+  const [amenityDraft, setAmenityDraft] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [notice, setNotice] = useState<string | null>(null);
+
+  const setField = (field: keyof FormState, value: string) => {
+    setForm((current) => ({ ...current, [field]: value }));
+  };
+
+  const addAmenity = () => {
+    const value = amenityDraft.trim();
+    if (!value) return;
+    if (amenities.some((item) => item.toLowerCase() === value.toLowerCase())) {
+      setAmenityDraft("");
+      return;
+    }
+    setAmenities((current) => [...current, value]);
+    setAmenityDraft("");
+  };
+
+  const removeAmenity = (item: string) => {
+    setAmenities((current) => current.filter((entry) => entry !== item));
+  };
+
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setNotice(null);
+    setFieldErrors({});
+
+    if (!isEdit && (!hostNameValue.trim() || !hostEmail)) {
+      setNotice("Your session details are needed to list the studio. Please sign in again.");
+      return;
+    }
+
+    const payload: Record<string, unknown> = {
+      title: form.title.trim(),
+      category: form.category,
+      location: form.location.trim(),
+      address: form.address.trim(),
+      image: form.image.trim(),
+      overview: form.overview.trim(),
+      amenities,
+    };
+
+    const hourlyRate = Number(form.hourlyRate);
+    if (!form.hourlyRate.trim() || !Number.isFinite(hourlyRate) || hourlyRate <= 0) {
+      setFieldErrors({ hourlyRate: "Hourly rate must be a number greater than zero" });
+      return;
+    }
+    payload.hourlyRate = hourlyRate;
+
+    if (form.securityDeposit.trim()) {
+      const deposit = Number(form.securityDeposit);
+      if (!Number.isFinite(deposit) || deposit < 0) {
+        setFieldErrors({ securityDeposit: "Security deposit must be zero or more" });
+        return;
+      }
+      payload.securityDeposit = deposit;
+    }
+
+    const maxCapacity = Number(form.maxCapacity);
+    if (
+      !form.maxCapacity.trim() ||
+      !Number.isFinite(maxCapacity) ||
+      maxCapacity <= 0 ||
+      !Number.isInteger(maxCapacity)
+    ) {
+      setFieldErrors({
+        maxCapacity: "Max capacity must be a whole number greater than zero",
+      });
+      return;
+    }
+    payload.maxCapacity = maxCapacity;
+
+    // hostName is a required field on creation; ownership fields are
+    // server-managed on update and must never be sent.
+    if (!isEdit) payload.hostName = hostNameValue.trim();
+    if (!isEdit) payload.hostEmail = hostEmail;
+
+    setSubmitting(true);
+    try {
+      const response = await fetch(
+        isEdit ? `${API_BASE_URL}/hosts/listings/${studioId}` : `${API_BASE_URL}/studios`,
+        {
+          method: isEdit ? "PUT" : "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify(payload),
+        }
+      );
+      const result = await parseApiResponse(response);
+
+      if (!result.ok) {
+        // Backend validation errors arrive keyed by field name.
+        const errors =
+          result.raw &&
+          typeof result.raw === "object" &&
+          typeof (result.raw as { errors?: unknown }).errors === "object"
+            ? ((result.raw as { errors: Record<string, string> }).errors ?? {})
+            : {};
+        if (Object.keys(errors).length > 0) {
+          setFieldErrors(errors);
+          setNotice("Please fix the highlighted fields.");
+        } else {
+          setNotice(result.message);
+        }
+        toast.error(result.message);
+        return;
+      }
+
+      if (isEdit) {
+        toast.success("Listing updated.");
+        onSaved?.();
+        router.refresh();
+      } else {
+        const created = result.data as { _id?: string } | null;
+        toast.success("Studio listed. It is now visible in the gallery.");
+        if (created?._id) {
+          router.push(`/studios/${created._id}`);
+        } else {
+          router.push("/my-listings");
+        }
+      }
+    } catch {
+      setNotice("We could not reach the StudioSpace API. Please try again.");
+      toast.error("Network error. Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="flex flex-col gap-6" aria-label={isEdit ? "Edit studio listing" : "List a new studio"}>
+      {notice && (
+        <p
+          role="alert"
+          className="rounded-2xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive"
+        >
+          {notice}
+        </p>
+      )}
+
+      {/* Basics */}
+      <section className="flex flex-col gap-4">
+        <h2 className="font-heading text-xl tracking-tight">Basics</h2>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="flex flex-col gap-1.5 sm:col-span-2">
+            <Label htmlFor="studio-title" className="pl-4">Studio title</Label>
+            <input
+              id="studio-title"
+              value={form.title}
+              onChange={(event) => setField("title", event.target.value)}
+              placeholder="e.g. Sunlit Rooftop Photo Studio"
+              className={inputClasses}
+              aria-invalid={Boolean(fieldErrors.title)}
+              required
+            />
+            {fieldErrors.title && (
+              <p className="pl-4 text-xs text-destructive">{fieldErrors.title}</p>
+            )}
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="studio-category" className="pl-4">Category</Label>
+            <select
+              id="studio-category"
+              value={form.category}
+              onChange={(event) => setField("category", event.target.value)}
+              className={selectClasses}
+              aria-invalid={Boolean(fieldErrors.category)}
+              required
+            >
+              <option value="" disabled>
+                Choose a category
+              </option>
+              {CATEGORIES.map((item) => (
+                <option key={item.slug} value={item.title}>
+                  {item.title}
+                </option>
+              ))}
+            </select>
+            {fieldErrors.category && (
+              <p className="pl-4 text-xs text-destructive">{fieldErrors.category}</p>
+            )}
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="studio-location" className="pl-4">City / area</Label>
+            <input
+              id="studio-location"
+              value={form.location}
+              onChange={(event) => setField("location", event.target.value)}
+              placeholder="e.g. Dhaka"
+              className={inputClasses}
+              aria-invalid={Boolean(fieldErrors.location)}
+              required
+            />
+            {fieldErrors.location && (
+              <p className="pl-4 text-xs text-destructive">{fieldErrors.location}</p>
+            )}
+          </div>
+
+          <div className="flex flex-col gap-1.5 sm:col-span-2">
+            <Label htmlFor="studio-address" className="pl-4">Full address</Label>
+            <input
+              id="studio-address"
+              value={form.address}
+              onChange={(event) => setField("address", event.target.value)}
+              placeholder="House 12, Road 5, Dhanmondi, Dhaka"
+              className={inputClasses}
+              aria-invalid={Boolean(fieldErrors.address)}
+              required
+            />
+            {fieldErrors.address && (
+              <p className="pl-4 text-xs text-destructive">{fieldErrors.address}</p>
+            )}
+          </div>
+        </div>
+      </section>
+
+      {/* Presentation */}
+      <section className="flex flex-col gap-4">
+        <h2 className="font-heading text-xl tracking-tight">Presentation</h2>
+
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="studio-image" className="pl-4">Cover image URL</Label>
+          <div className="grid items-start gap-4 sm:grid-cols-[10rem_1fr]">
+            {/* Preview keeps the host honest about the cover image. */}
+            <div className="relative aspect-square w-full overflow-hidden rounded-2xl border border-border bg-muted sm:w-40">
+              {form.image.trim() ? (
+                <Image
+                  src={form.image.trim()}
+                  alt="Cover preview"
+                  fill
+                  sizes="160px"
+                  className="object-cover"
+                  unoptimized
+                />
+              ) : (
+                <span className="flex h-full flex-col items-center justify-center gap-1.5 text-muted-foreground">
+                  <ImageOff className="size-5" aria-hidden="true" />
+                  <span className="text-[0.65rem]">No preview yet</span>
+                </span>
+              )}
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <input
+                id="studio-image"
+                value={form.image}
+                onChange={(event) => setField("image", event.target.value)}
+                placeholder="https://images.unsplash.com/…"
+                className={pillInputClasses}
+                inputMode="url"
+                aria-invalid={Boolean(fieldErrors.image)}
+                required
+              />
+              {fieldErrors.image && (
+                <p className="text-xs text-destructive">{fieldErrors.image}</p>
+              )}
+              <p className="text-xs text-muted-foreground">
+                Paste a direct link to a hosted photo of your space.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="studio-overview" className="pl-4">Overview</Label>
+          <Textarea
+            id="studio-overview"
+            value={form.overview}
+            onChange={(event) => setField("overview", event.target.value)}
+            placeholder="Describe the space, the light, the gear available, and what it is best for…"
+            className="min-h-24 rounded-2xl border-border bg-card px-4 py-3"
+            aria-invalid={Boolean(fieldErrors.overview)}
+            required
+          />
+          {fieldErrors.overview && (
+            <p className="pl-4 text-xs text-destructive">{fieldErrors.overview}</p>
+          )}
+        </div>
+      </section>
+
+      {/* Pricing and capacity */}
+      <section className="flex flex-col gap-4">
+        <h2 className="font-heading text-xl tracking-tight">Pricing &amp; capacity</h2>
+        <div className="grid gap-4 sm:grid-cols-3">
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="studio-rate" className="pl-4">Hourly rate (৳)</Label>
+            <input
+              id="studio-rate"
+              type="number"
+              min={1}
+              value={form.hourlyRate}
+              onChange={(event) => setField("hourlyRate", event.target.value)}
+              placeholder="1500"
+              className={pillInputClasses}
+              aria-invalid={Boolean(fieldErrors.hourlyRate)}
+              required
+            />
+            {fieldErrors.hourlyRate && (
+              <p className="text-xs text-destructive">{fieldErrors.hourlyRate}</p>
+            )}
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="studio-deposit" className="pl-4">Security deposit (৳)</Label>
+            <input
+              id="studio-deposit"
+              type="number"
+              min={0}
+              value={form.securityDeposit}
+              onChange={(event) => setField("securityDeposit", event.target.value)}
+              placeholder="Optional"
+              className={pillInputClasses}
+              aria-invalid={Boolean(fieldErrors.securityDeposit)}
+            />
+            {fieldErrors.securityDeposit && (
+              <p className="text-xs text-destructive">{fieldErrors.securityDeposit}</p>
+            )}
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="studio-capacity" className="pl-4">Max guests</Label>
+            <input
+              id="studio-capacity"
+              type="number"
+              min={1}
+              step={1}
+              value={form.maxCapacity}
+              onChange={(event) => setField("maxCapacity", event.target.value)}
+              placeholder="10"
+              className={pillInputClasses}
+              aria-invalid={Boolean(fieldErrors.maxCapacity)}
+              required
+            />
+            {fieldErrors.maxCapacity && (
+              <p className="text-xs text-destructive">{fieldErrors.maxCapacity}</p>
+            )}
+          </div>
+        </div>
+      </section>
+
+      {/* Amenities */}
+      <section className="flex flex-col gap-3">
+        <h2 className="font-heading text-xl tracking-tight">Amenities</h2>
+        <div className="flex gap-2">
+          <Label htmlFor="studio-amenity" className="sr-only">
+            Add amenity
+          </Label>
+          <input
+            id="studio-amenity"
+            value={amenityDraft}
+            onChange={(event) => setAmenityDraft(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                addAmenity();
+              }
+            }}
+            placeholder="e.g. Professional lighting"
+            className={pillInputClasses}
+          />
+          <Button type="button" variant="outline" onClick={addAmenity} className="h-11 shrink-0 rounded-2xl">
+            <Plus className="size-4" /> Add
+          </Button>
+        </div>
+        {amenities.length > 0 ? (
+          <ul className="flex flex-wrap gap-2">
+            {amenities.map((item) => (
+              <li key={item}>
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted px-3 py-1.5 text-xs text-foreground">
+                  <Check className="size-3 text-primary" aria-hidden="true" />
+                  {item}
+                  <button
+                    type="button"
+                    onClick={() => removeAmenity(item)}
+                    aria-label={`Remove ${item}`}
+                    className="ml-0.5 rounded-full p-0.5 text-muted-foreground transition-colors hover:bg-background hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
+                  >
+                    <X className="size-3" aria-hidden="true" />
+                  </button>
+                </span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-xs text-muted-foreground">
+            No amenities added yet — list what creators can use on site.
+          </p>
+        )}
+        {fieldErrors.amenities && (
+          <p className="text-xs text-destructive">{fieldErrors.amenities}</p>
+        )}
+      </section>
+
+      {/* Host details (create mode only — ownership is server-managed) */}
+      {!isEdit && (
+        <section className="flex flex-col gap-4">
+          <h2 className="font-heading text-xl tracking-tight">Host details</h2>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="studio-host-name" className="pl-4">Host name</Label>
+              <input
+                id="studio-host-name"
+                value={hostNameValue}
+                onChange={(event) => setHostNameValue(event.target.value)}
+                placeholder="Your public host name"
+                className={inputClasses}
+                aria-invalid={Boolean(fieldErrors.hostName)}
+                required
+              />
+              {fieldErrors.hostName && (
+                <p className="pl-4 text-xs text-destructive">{fieldErrors.hostName}</p>
+              )}
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="studio-host-email" className="pl-4">Host email</Label>
+              <input
+                id="studio-host-email"
+                value={hostEmail ?? ""}
+                readOnly
+                disabled
+                className={`${inputClasses} cursor-not-allowed text-muted-foreground`}
+              />
+              <p className="pl-4 text-xs text-muted-foreground">
+                From your account — ownership is tied to it and cannot be changed.
+              </p>
+            </div>
+          </div>
+        </section>
+      )}
+
+      <div className="flex items-center justify-end gap-3 border-t border-border pt-6">
+        <Button type="submit" size="lg" disabled={submitting}>
+          {submitting ? (
+            "Submitting…"
+          ) : (
+            <>
+              <Camera className="size-4" aria-hidden="true" />
+              {isEdit ? "Save changes" : "Publish listing"}
+            </>
+          )}
+        </Button>
+      </div>
+      <p className="flex items-center gap-2 text-xs leading-relaxed text-muted-foreground">
+        <Save className="size-3.5 shrink-0" aria-hidden="true" />
+        listings appear in the public gallery immediately after publishing.
+      </p>
+    </form>
+  );
+}
