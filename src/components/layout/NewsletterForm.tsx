@@ -30,10 +30,10 @@ export function NewsletterForm() {
     return (
       <p className="flex items-start gap-2 text-sm text-muted-foreground">
         <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" />
-        <span>
+        {/* <span>
           Thank you for subscribing. Once launch notifications go live,
           we&apos;ll let you know first.
-        </span>
+        </span> */}
       </p>
     );
   }
