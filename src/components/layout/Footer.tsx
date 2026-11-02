@@ -67,7 +67,7 @@ const SOCIAL_LINKS = [
   { label: "Facebook", href: "https://facebook.com/studiospace", icon: FacebookIcon },
   { label: "Instagram", href: "https://instagram.com/studiospace", icon: InstagramIcon },
   { label: "LinkedIn", href: "https://linkedin.com/company/studiospace", icon: LinkedInIcon },
-  { label: "X", href: "https://x.com/studiospace", icon: XIcon },
+  // { label: "X", href: "https://x.com/studiospace", icon: XIcon },
 ];
 
 const EXPLORE_LINKS = [
