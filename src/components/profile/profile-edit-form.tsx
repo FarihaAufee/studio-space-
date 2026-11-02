@@ -32,14 +32,6 @@ interface ProfileEditFormProps {
   };
 }
 
-/**
- * Standalone profile editing form (/profile/edit).
- *
- * Changes are persisted through the Better Auth client (`updateUser`), so
- * name, phone, bio and the avatar go to the same authenticated account the
- * session comes from — the email itself stays read-only, matching how
- * Better Auth treats it without a verification flow.
- */
 export function ProfileEditForm({ initial }: ProfileEditFormProps) {
   const router = useRouter();
   const { data: session } = authClient.useSession();
