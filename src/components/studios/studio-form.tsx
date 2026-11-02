@@ -13,9 +13,11 @@ import { API_BASE_URL, parseApiResponse } from "@/lib/api";
 
 /**
  * Shared studio form for creating a listing (/add-studio) and editing an
- * existing one (My Listings). Submits to the StudioSpace backend; when the
- * backend auth integration is not live yet (status 501) failures are shown
- * honestly — no fake success state.
+ * existing one (My Listings). With the `admin` prop it becomes the admin
+ * edit form (/admin/studios/[id]/edit) targeting the admin API instead of
+ * the host listing API, and makes hostName/hostEmail editable. Submits to
+ * the StudioSpace backend; failures are shown honestly — no fake success
+ * state.
  */
 
 const inputClasses =
@@ -31,6 +33,8 @@ interface StudioFormProps {
   mode: "create" | "edit";
   /** Required in edit mode — the listing to update. */
   studioId?: string;
+  /** Admin area edit: PUTs /api/admin/studios/:id (requires ADMIN_EMAILS match server-side). */
+  admin?: boolean;
   initial?: {
     title?: string;
     category?: string;
@@ -42,6 +46,9 @@ interface StudioFormProps {
     securityDeposit?: number;
     maxCapacity?: number;
     amenities?: string[];
+    /** Host fields: editable only in admin mode, else server-managed. */
+    hostName?: string;
+    hostEmail?: string;
   };
   /** Session-provided host defaults (create mode only). */
   hostName?: string;
@@ -77,6 +84,7 @@ const EMPTY_FORM: FormState = {
 export function StudioForm({
   mode,
   studioId,
+  admin = false,
   initial,
   hostName,
   hostEmail,
@@ -98,7 +106,12 @@ export function StudioForm({
       initial?.securityDeposit !== undefined ? String(initial.securityDeposit) : "",
     maxCapacity: initial?.maxCapacity !== undefined ? String(initial.maxCapacity) : "",
   });
-  const [hostNameValue, setHostNameValue] = useState(hostName ?? "");
+  const [hostNameValue, setHostNameValue] = useState(
+    initial?.hostName ?? hostName ?? ""
+  );
+  const [hostEmailValue, setHostEmailValue] = useState(
+    initial?.hostEmail ?? hostEmail ?? ""
+  );
   const [amenities, setAmenities] = useState<string[]>(initial?.amenities ?? []);
   const [amenityDraft, setAmenityDraft] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -129,7 +142,7 @@ export function StudioForm({
     setNotice(null);
     setFieldErrors({});
 
-    if (!isEdit && (!hostNameValue.trim() || !hostEmail)) {
+    if (!isEdit && (!hostNameValue.trim() || !hostEmailValue.trim())) {
       setNotice("Your session details are needed to list the studio. Please sign in again.");
       return;
     }
@@ -175,14 +188,26 @@ export function StudioForm({
     payload.maxCapacity = maxCapacity;
 
     // hostName is a required field on creation; ownership fields are
-    // server-managed on update and must never be sent.
-    if (!isEdit) payload.hostName = hostNameValue.trim();
-    if (!isEdit) payload.hostEmail = hostEmail;
+    // server-managed on update and must never be sent from a host session.
+    // Admin edits may correct the host display fields (hostName/hostEmail)
+    // — hostId itself is always dropped server-side, for admins too.
+    if (!isEdit) {
+      payload.hostName = hostNameValue.trim();
+      payload.hostEmail = hostEmailValue.trim();
+    } else if (admin) {
+      if (hostNameValue.trim()) payload.hostName = hostNameValue.trim();
+      if (hostEmailValue.trim()) payload.hostEmail = hostEmailValue.trim();
+    }
 
     setSubmitting(true);
     try {
+      const endpoint = isEdit
+        ? admin
+          ? `${API_BASE_URL}/admin/studios/${studioId}`
+          : `${API_BASE_URL}/hosts/listings/${studioId}`
+        : `${API_BASE_URL}/studios`;
       const response = await fetch(
-        isEdit ? `${API_BASE_URL}/hosts/listings/${studioId}` : `${API_BASE_URL}/studios`,
+        endpoint,
         {
           method: isEdit ? "PUT" : "POST",
           headers: { "Content-Type": "application/json" },
@@ -213,7 +238,10 @@ export function StudioForm({
       if (isEdit) {
         toast.success("Listing updated.");
         onSaved?.();
-        router.refresh();
+        // Admin edits land back on the admin studio list, otherwise the
+        // refresh keeps the host-dialog behaviour.
+        if (admin) router.push("/admin/studios");
+        else router.refresh();
       } else {
         const created = result.data as { _id?: string } | null;
         toast.success("Studio listed. It is now visible in the gallery.");
@@ -494,8 +522,10 @@ export function StudioForm({
         )}
       </section>
 
-      {/* Host details (create mode only — ownership is server-managed) */}
-      {!isEdit && (
+      {/* Host details (create mode and admin edits — ownership is
+          server-managed; hosts cannot change it, admins may correct
+          the display fields) */}
+      {(!isEdit || admin) && (
         <section className="flex flex-col gap-4">
           <h2 className="font-heading text-xl tracking-tight">Host details</h2>
           <div className="grid gap-4 sm:grid-cols-2">
@@ -508,7 +538,9 @@ export function StudioForm({
                 placeholder="Your public host name"
                 className={inputClasses}
                 aria-invalid={Boolean(fieldErrors.hostName)}
-                required
+                /* required on host creation; optional in admin edits where
+                   legacy docs may not carry host fields at all */
+                required={!admin}
               />
               {fieldErrors.hostName && (
                 <p className="pl-4 text-xs text-destructive">{fieldErrors.hostName}</p>
@@ -518,13 +550,25 @@ export function StudioForm({
               <Label htmlFor="studio-host-email" className="pl-4">Host email</Label>
               <input
                 id="studio-host-email"
-                value={hostEmail ?? ""}
-                readOnly
-                disabled
-                className={`${inputClasses} cursor-not-allowed text-muted-foreground`}
+                type="email"
+                value={hostEmailValue}
+                onChange={(event) => setHostEmailValue(event.target.value)}
+                placeholder="host@example.com"
+                className={
+                  admin
+                    ? inputClasses
+                    : `${inputClasses} cursor-not-allowed text-muted-foreground`
+                }
+                aria-invalid={Boolean(fieldErrors.hostEmail)}
+                /* required for creation; optional/correctable for admins */
+                required={!admin}
+                readOnly={!admin}
+                disabled={!admin}
               />
               <p className="pl-4 text-xs text-muted-foreground">
-                From your account — ownership is tied to it and cannot be changed.
+                {admin
+                  ? "Only an admin can adjust this contact field; it also decides legacy ownership."
+                  : "From your account — ownership is tied to it and cannot be changed."}
               </p>
             </div>
           </div>

@@ -12,6 +12,7 @@ import {
   Menu,
   Moon,
   Plus,
+  ShieldCheck,
   Sun,
   User,
   X,
@@ -30,6 +31,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useTheme } from "@/hooks/use-theme";
 import { authClient } from "@/lib/auth-client";
+import { API_BASE_URL } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 const NAV_LINKS = [
@@ -63,12 +65,43 @@ export function Navbar() {
   const { toggle } = useTheme();
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  // True only while GET /api/admin/stats (admin-gated) succeeds with the
+  // current session cookie — the backend ADMIN_EMAILS list remains fully
+  // server-side; no admin state is ever read from the browser.
+  const [isAdmin, setIsAdmin] = useState(false);
 
   // Live Better Auth session, kept in sync by the reactive auth client —
   // signing in elsewhere in the app updates this store without a page reload.
   const { data: session, isPending } = authClient.useSession();
   const sessionUser = session?.user ?? null;
   const isAuthenticated = !isPending && Boolean(sessionUser);
+
+  // Probe admin status once per signed-in user. 401/403 responses simply
+  // leave the admin entries hidden; no admin capability is inferred locally.
+  useEffect(() => {
+    let cancelled = false;
+    const run = async () => {
+      if (!sessionUser) {
+        // Await first so no setState runs synchronously inside the effect.
+        await Promise.resolve();
+        if (!cancelled) setIsAdmin(false);
+        return;
+      }
+      try {
+        const response = await fetch(`${API_BASE_URL}/admin/stats`, {
+          credentials: "include",
+          cache: "no-store",
+        });
+        if (!cancelled) setIsAdmin(response.ok);
+      } catch {
+        // Network failure: leave admin entries hidden rather than guessing.
+      }
+    };
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionUser]);
   const userImage = getUserImage(sessionUser?.image);
   const userInitials = getUserInitials(sessionUser?.name ?? null, sessionUser?.email ?? null);
   // Prefer the stored display name; fall back to the account email so the
@@ -214,6 +247,11 @@ export function Navbar() {
                   <DropdownMenuItem render={<Link href="/booking-requests" />}>
                     <Inbox className="size-4" /> Booking Requests
                   </DropdownMenuItem>
+                  {isAdmin ? (
+                    <DropdownMenuItem render={<Link href="/admin" />}>
+                      <ShieldCheck className="size-4" /> Admin Dashboard
+                    </DropdownMenuItem>
+                  ) : null}
                 </DropdownMenuGroup>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem render={<Link href="/profile" />}>
@@ -288,6 +326,18 @@ export function Navbar() {
           </ul>
 
           <div className="mt-2 flex flex-col gap-3">
+            {isAdmin ? (
+              <Button
+                variant="outline"
+                size="lg"
+                onClick={() => setMobileOpen(false)}
+                render={
+                  <Link href="/admin" onClick={() => setMobileOpen(false)} />
+                }
+              >
+                Admin Dashboard
+              </Button>
+            ) : null}
             <Button
               variant="outline"
               size="lg"

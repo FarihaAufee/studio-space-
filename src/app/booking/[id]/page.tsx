@@ -5,6 +5,10 @@ import { ArrowLeft } from "lucide-react";
 import { getServerSession } from "@/lib/session";
 import { BookingDetailView } from "@/components/bookings/booking-detail-view";
 
+// Cache Components migration: this route reads the Better Auth session
+// (request data) and must block on the server — see nextjs.org/docs/app/guides/instant-navigation#opting-out
+export const instant = false;
+
 interface BookingPageProps {
   params: Promise<{ id: string }>;
 }

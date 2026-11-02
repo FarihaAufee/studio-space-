@@ -7,6 +7,11 @@ import { CATEGORIES } from "@/data/categories";
 import { Button } from "@/components/ui/button";
 import { StudioGrid } from "@/components/studios/studio-card";
 
+// Cache Components migration: this route resolves runtime params and live
+// studio data from the API, so it must block on the server — see
+// nextjs.org/docs/app/guides/instant-navigation#opting-out
+export const instant = false;
+
 interface CategoryPageProps {
   params: Promise<{ category: string }>;
 }

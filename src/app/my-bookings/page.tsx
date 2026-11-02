@@ -4,6 +4,10 @@ import { CalendarCheck } from "lucide-react";
 import { getServerSession } from "@/lib/session";
 import { MyBookingsView } from "@/components/bookings/my-bookings-view";
 
+// Cache Components migration: this route reads the Better Auth session
+// (request data) and must block on the server — see nextjs.org/docs/app/guides/instant-navigation#opting-out
+export const instant = false;
+
 export const metadata: Metadata = {
   title: "My Bookings — StudioSpace",
   description: "Review your booking history and upcoming studio sessions.",

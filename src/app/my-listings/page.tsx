@@ -4,6 +4,10 @@ import { Images } from "lucide-react";
 import { getServerSession } from "@/lib/session";
 import { MyListingsView } from "@/components/bookings/my-listings-view";
 
+// Cache Components migration: this route reads the Better Auth session
+// (request data) and must block on the server — see nextjs.org/docs/app/guides/instant-navigation#opting-out
+export const instant = false;
+
 export const metadata: Metadata = {
   title: "My Listings — StudioSpace",
   description: "Manage the studios you have listed on StudioSpace.",

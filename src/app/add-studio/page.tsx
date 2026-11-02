@@ -5,6 +5,10 @@ import { Camera, Info } from "lucide-react";
 import { getServerSession } from "@/lib/session";
 import { StudioForm } from "@/components/studios/studio-form";
 
+// Cache Components migration: this route reads the Better Auth session
+// (request data) and must block on the server — see nextjs.org/docs/app/guides/instant-navigation#opting-out
+export const instant = false;
+
 export const metadata: Metadata = {
   title: "Add New Studio — StudioSpace",
   description: "List your creative studio on StudioSpace and reach creators near you.",

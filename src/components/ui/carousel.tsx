@@ -95,11 +95,15 @@ function Carousel({
 
   React.useEffect(() => {
     if (!api) return
-    onSelect(api)
+    // Defer the initial sync to the next frame: React forbids setState
+    // synchronously inside an effect body; embla already has the correct
+    // scroll state, so the snapshot is just slightly later than before.
+    const initialSync = requestAnimationFrame(() => onSelect(api))
     api.on("reInit", onSelect)
     api.on("select", onSelect)
 
     return () => {
+      cancelAnimationFrame(initialSync)
       api?.off("select", onSelect)
     }
   }, [api, onSelect])

@@ -9,6 +9,11 @@ import { Button } from "@/components/ui/button";
 import { StudioGrid } from "@/components/studios/studio-card";
 import { StudioFilters, StudioFiltersSkeleton } from "@/components/studios/studio-filters";
 
+// Cache Components migration: this route renders live studio data from the
+// API per request, so it must block on the server — see
+// nextjs.org/docs/app/guides/instant-navigation#opting-out
+export const instant = false;
+
 export const metadata: Metadata = {
   title: "Explore Studios — StudioSpace",
   description:

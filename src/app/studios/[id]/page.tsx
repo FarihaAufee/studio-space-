@@ -14,6 +14,11 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { BookingCard } from "@/components/studios/booking-card";
 
+// Cache Components migration: this route resolves studio details from the
+// live API per request (uncached fetch + dynamic id), so it must block on
+// the server — see nextjs.org/docs/app/guides/instant-navigation#opting-out
+export const instant = false;
+
 interface Studio {
   _id: string;
   title: string;
