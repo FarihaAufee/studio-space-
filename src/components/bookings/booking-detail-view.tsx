@@ -144,17 +144,17 @@ export function BookingDetailView({ bookingId }: { bookingId: string }) {
     }
   };
 
-  // if (loading) {
-  //   return (
-  //     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
-  //       <div className="flex flex-col gap-4">
-  //         <Skeleton className="h-64 w-full rounded-3xl" />
-  //         <Skeleton className="h-40 w-full rounded-3xl" />
-  //       </div>
-  //       <Skeleton className="h-80 w-full rounded-3xl" />
-  //     </div>
-  //   );
-  // }
+  if (loading) {
+    return (
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
+        <div className="flex flex-col gap-4">
+          <Skeleton className="h-64 w-full rounded-3xl" />
+          <Skeleton className="h-40 w-full rounded-3xl" />
+        </div>
+        <Skeleton className="h-80 w-full rounded-3xl" />
+      </div>
+    );
+  }
 
   if (error || !booking) {
     return (
