@@ -360,18 +360,18 @@ export function Navbar() {
                 Logout
               </Button>
             ) : (
-              // <Button
-              //   size="lg"
-              //   onClick={() => setMobileOpen(false)}
-              //   render={
-              //     <Link
-              //       href="/register"
-              //       onClick={() => setMobileOpen(false)}
-              //     />
-              //   }
-              // >
-              //   Register
-              // </Button>
+              <Button
+                size="lg"
+                onClick={() => setMobileOpen(false)}
+                render={
+                  <Link
+                    href="/register"
+                    onClick={() => setMobileOpen(false)}
+                  />
+                }
+              >
+                Register
+              </Button>
             )}
           </div>
         </div>
