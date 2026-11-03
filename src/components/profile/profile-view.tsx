@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
@@ -20,6 +20,7 @@ import {
   Pencil,
   Phone,
   ShieldCheck,
+  Sparkles,
   User,
   UserRound,
   X,
@@ -40,6 +41,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
 import { authClient } from "@/lib/auth-client";
 import { resizeImageFile } from "@/lib/profile-image";
+import { API_BASE_URL } from "@/lib/api";
 import { cn } from "cn";
 
 // Matches the pill input styling used across StudioSpace (auth forms).
@@ -212,6 +214,40 @@ export function ProfileView() {
   const [passwordForm, setPasswordForm] = useState<PasswordFormState>(EMPTY_PASSWORD_FORM);
   const [changingPassword, setChangingPassword] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
+
+  // Effective role, probed server-side (GET /api/hosts/status) so the
+  // quick links stay honest for customers, hosts, and admins.
+  const [isHost, setIsHost] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    const run = async () => {
+      if (!user) return;
+      await Promise.resolve();
+      try {
+        const response = await fetch(`${API_BASE_URL}/hosts/status`, {
+          credentials: "include",
+          cache: "no-store",
+        });
+        if (cancelled) return;
+        if (!response.ok) {
+          setIsHost(false);
+          return;
+        }
+        const raw = await response.json().catch(() => null);
+        const data =
+          raw && typeof raw === "object" && "data" in raw
+            ? (raw as { data?: { isHost?: boolean } }).data
+            : undefined;
+        setIsHost(Boolean(data?.isHost));
+      } catch {
+        // Network failure keeps the customer links rather than guessing.
+      }
+    };
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
 
   const memberSince = user?.createdAt ? new Date(user.createdAt) : null;
   const memberSinceLabel =
@@ -727,13 +763,20 @@ export function ProfileView() {
 
               <Separator />
 
-              {/* Quick links */}
+              {/* Quick links — role-aware: customers get the host
+                  onboarding, hosts get the listing manager. */}
               <section className="flex flex-col gap-3" aria-label="Quick links">
                 <h2 className="font-heading text-lg font-medium">Quick Links</h2>
                 <div className="grid grid-cols-2 gap-2.5">
-                  <Button variant="outline" render={<Link href="/my-listings" />}>
-                    <ListPlus className="size-4" /> My Listings
-                  </Button>
+                  {isHost ? (
+                    <Button variant="outline" render={<Link href="/my-listings" />}>
+                      <ListPlus className="size-4" /> My Listings
+                    </Button>
+                  ) : (
+                    <Button variant="outline" render={<Link href="/become-a-host" />}>
+                      <Sparkles className="size-4" /> Become a Host
+                    </Button>
+                  )}
                   <Button variant="outline" render={<Link href="/my-bookings" />}>
                     <CalendarCheck className="size-4" /> My Bookings
                   </Button>

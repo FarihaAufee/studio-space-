@@ -13,41 +13,18 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { BookingCard } from "@/components/studios/booking-card";
+import { findStudioById } from "@/lib/db";
+import type { Studio } from "@/app/studios/studios";
 
 // Cache Components migration: this route resolves studio details from the
-// live API per request (uncached fetch + dynamic id), so it must block on
-// the server — see nextjs.org/docs/app/guides/instant-navigation#opting-out
+// live database per request (dynamic id), so it must block on the server —
+// see nextjs.org/docs/app/guides/instant-navigation#opting-out
 export const instant = false;
 
-interface Studio {
-  _id: string;
-  title: string;
-  category: string;
-  location: string;
-  address: string;
-  image: string;
-  overview: string;
-  hourlyRate: number;
-  securityDeposit: number;
-  maxCapacity: number;
-  amenities: string[];
-  hostName: string;
-}
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL;
-
-// Cached per request so the page and its metadata share one fetch.
+// Cached per request so the page and its metadata share one DB read.
 const getStudio = cache(async (id: string): Promise<Studio | null> => {
   try {
-    const response = await fetch(`${API_URL}/studios/${id}`, {
-      cache: "no-store",
-    });
-
-    if (response.status === 404) return null;
-    if (!response.ok) throw new Error("Failed to fetch studio");
-
-    const result = await response.json();
-    return result.data;
+    return await findStudioById(id);
   } catch (error) {
     console.error(error);
     return null;
@@ -184,12 +161,12 @@ export default async function StudioDetailsPage({
                 <CardContent className="flex items-center gap-4">
                   <Avatar className="size-14 shrink-0">
                     <AvatarFallback className="bg-primary font-heading text-xl font-medium text-primary-foreground">
-                      {getInitials(studio.hostName) || "H"}
+                      {getInitials(studio.hostName ?? "") || "H"}
                     </AvatarFallback>
                   </Avatar>
                   <div className="flex min-w-0 flex-col gap-0.5">
                     <span className="font-heading text-lg leading-tight">
-                      Hosted by {studio.hostName}
+                      Hosted by {studio.hostName ?? "a StudioSpace host"}
                     </span>
                     <span className="text-sm text-muted-foreground">
                       {studio.category} host in {studio.location}

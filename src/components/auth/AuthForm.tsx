@@ -14,6 +14,14 @@ const inputClasses =
 
 interface AuthFormProps {
   mode: "login" | "register";
+  /**
+   * Same-origin path to return to after a successful sign-in (e.g. the
+   * Become a Host onboarding, reached through /login?next=…). Defaults to
+   * the home page. Social sign-in uses it as its callback URL.
+   */
+  redirectTarget?: string;
+  /** Shows a small notice when the user was sent here from a gated page. */
+  showReturnNotice?: boolean;
 }
 
 function GoogleIcon() {
@@ -58,11 +66,13 @@ function GitHubIcon() {
  * Sign-up and sign-in go through Better Auth (email/password), with Google
  * and GitHub social sign-in buttons on top.
  */
-export function AuthForm({ mode }: AuthFormProps) {
+export function AuthForm({ mode, redirectTarget, showReturnNotice }: AuthFormProps) {
   const isRegister = mode === "register";
   const router = useRouter();
   const [submitting, setSubmitting] = useState(false);
   const [socialProvider, setSocialProvider] = useState<"google" | "github" | null>(null);
+
+  const afterAuth = redirectTarget ?? "/";
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -85,7 +95,7 @@ export function AuthForm({ mode }: AuthFormProps) {
       toast.success(
         isRegister ? "Account created. Welcome to StudioSpace!" : "Signed in. Welcome back!"
       );
-      router.push("/");
+      router.push(afterAuth);
     } catch {
       toast.error("Something went wrong. Please try again.");
     } finally {
@@ -98,7 +108,7 @@ export function AuthForm({ mode }: AuthFormProps) {
     try {
       const { error } = await authClient.signIn.social({
         provider,
-        callbackURL: "/",
+        callbackURL: afterAuth,
       });
 
       if (error) {
@@ -130,6 +140,12 @@ export function AuthForm({ mode }: AuthFormProps) {
             ? "Book studios as a creator, or list your own space as a host."
             : "Sign in to manage your bookings and studio listings."}
         </p>
+        {showReturnNotice && redirectTarget ? (
+          <p className="mt-4 rounded-2xl border border-border bg-muted/50 px-4 py-2.5 text-xs leading-relaxed text-muted-foreground">
+            Sign in and we will take you straight back to{" "}
+            <span className="font-medium text-foreground">{redirectTarget}</span>.
+          </p>
+        ) : null}
       </div>
 
       <div className="mt-8 flex flex-col gap-3">

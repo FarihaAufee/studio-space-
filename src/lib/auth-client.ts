@@ -14,6 +14,11 @@ import type { auth } from "@/lib/auth";
  * is optional. Set NEXT_PUBLIC_BETTER_AUTH_URL only if authentication is
  * served from a different origin.
  */
+
+
+
+
+
 export const authClient = createAuthClient({
   baseURL: process.env.NEXT_PUBLIC_BETTER_AUTH_URL,
   plugins: [inferAdditionalFields<typeof auth>()],

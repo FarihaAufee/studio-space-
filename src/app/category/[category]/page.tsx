@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
-import { getCategoryStudios } from "@/lib/api";
+import { listStudiosByCategory } from "@/lib/db";
 import type { Studio } from "@/app/studios/studios";
 import { CATEGORIES } from "@/data/categories";
 import { Button } from "@/components/ui/button";
@@ -46,7 +46,9 @@ export async function generateMetadata({
 async function CategoryStudios({ category }: { category: string }) {
   let studios: Studio[];
   try {
-    studios = await getCategoryStudios(category);
+    // Server components read the database directly (same data the public
+    // GET /api/categories/:category/studios route serves).
+    studios = await listStudiosByCategory(category);
   } catch (error) {
     console.error(error);
     return (

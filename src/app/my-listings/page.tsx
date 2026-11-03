@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { Images } from "lucide-react";
 import { getServerSession } from "@/lib/session";
+import { isAdminEmail } from "@/lib/admin";
 import { MyListingsView } from "@/components/bookings/my-listings-view";
 
 // Cache Components migration: this route reads the Better Auth session
@@ -17,6 +18,13 @@ export const metadata: Metadata = {
 export default async function MyListingsPage() {
   const session = await getServerSession();
   if (!session) redirect("/login");
+
+  // Hosts and admins manage listings here; customers are redirected to the
+  // Become a Host onboarding.
+  const isHostOrAdmin =
+    isAdminEmail(session.user.email) ||
+    (session.user as { role?: string }).role === "host";
+  if (!isHostOrAdmin) redirect("/become-a-host");
 
   return (
     <main className="min-h-screen bg-background">

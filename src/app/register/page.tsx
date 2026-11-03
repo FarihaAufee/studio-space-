@@ -9,7 +9,10 @@ export const metadata: Metadata = {
 export default function RegisterPage() {
   return (
     <div className="container-page flex flex-col py-16 md:py-24">
-      <AuthForm mode="register" />
+      <AuthForm
+        mode="register"
+        redirectTarget="/login?next=/become-a-host"
+      />
     </div>
   );
 }

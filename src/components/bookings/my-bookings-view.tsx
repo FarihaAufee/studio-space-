@@ -6,13 +6,11 @@ import Link from "next/link";
 import {
   CalendarDays,
   ChevronRight,
-  CircleAlert,
   Clock,
   Inbox,
   ServerOff,
   Users,
-} from "lucide-react";
-import { Button } from "@/components/ui/button";
+} from "lucide-react";import { Button } from "@/components/ui/button";
 import {
   Tabs,
   TabsContent,
@@ -36,7 +34,6 @@ export function MyBookingsView() {
   const [bookings, setBookings] = useState<BookingRecord[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [apiReady, setApiReady] = useState(true);
 
   // Shared loader for the retry action (event handlers may set state freely).
   const loadBookings = useCallback(async () => {
@@ -48,10 +45,9 @@ export function MyBookingsView() {
       const result = await parseApiResponse(response);
 
       if (response.ok) {
-        setApiReady(true);
+        setError(null);
         setBookings((result.data as BookingRecord[]) ?? []);
       } else {
-        setApiReady(response.status !== 501);
         setError(result.message);
       }
     } catch {
@@ -75,10 +71,9 @@ export function MyBookingsView() {
         if (cancelled) return;
 
         if (response.ok) {
-          setApiReady(true);
+          setError(null);
           setBookings((result.data as BookingRecord[]) ?? []);
         } else {
-          setApiReady(response.status !== 501);
           setError(result.message);
         }
       } catch {
@@ -168,25 +163,20 @@ export function MyBookingsView() {
   if (error) {
     return (
       <div className="flex flex-col items-center gap-4 rounded-3xl border border-border bg-card px-6 py-16 text-center">
-        <span className="flex size-12 items-center justify-center rounded-full bg-muted text-muted-foreground">
-          {apiReady ? (
-            <ServerOff className="size-5" aria-hidden="true" />
-          ) : (
-            <CircleAlert className="size-5" aria-hidden="true" />
-          )}
+        <span className="flex size-12 items-center justify-center rounded-full bg-destructive/10 text-destructive">
+          <ServerOff className="size-5" aria-hidden="true" />
         </span>
         <p className="font-heading text-2xl tracking-tight">
           Bookings could not be loaded
         </p>
         <p className="max-w-md text-sm leading-relaxed text-muted-foreground">
-          {apiReady
-            ? error
-            : "The booking API does not accept authenticated requests yet — it activates automatically once the backend connects to Better Auth. Your booking history will appear here."}
+          {error}
         </p>
         <Button
           variant="outline"
           onClick={() => {
             setLoading(true);
+            setError(null);
             void loadBookings();
           }}
         >

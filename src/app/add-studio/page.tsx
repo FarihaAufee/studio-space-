@@ -3,6 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Camera, Info } from "lucide-react";
 import { getServerSession } from "@/lib/session";
+import { isAdminEmail } from "@/lib/admin";
 import { StudioForm } from "@/components/studios/studio-form";
 
 // Cache Components migration: this route reads the Better Auth session
@@ -22,6 +23,13 @@ export const metadata: Metadata = {
 export default async function AddStudioPage() {
   const session = await getServerSession();
   if (!session) redirect("/login");
+
+  // Only hosts (and admins) can publish studios; customers are pointed at
+  // the Become a Host onboarding first.
+  const isHostOrAdmin =
+    isAdminEmail(session.user.email) ||
+    (session.user as { role?: string }).role === "host";
+  if (!isHostOrAdmin) redirect("/become-a-host");
 
   return (
     <main className="min-h-screen bg-background">

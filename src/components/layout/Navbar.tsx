@@ -7,12 +7,14 @@ import {
   CalendarCheck,
   ChevronDown,
   Inbox,
+  LayoutDashboard,
   ListPlus,
   LogOut,
   Menu,
   Moon,
   Plus,
   ShieldCheck,
+  Sparkles,
   Sun,
   User,
   X,
@@ -65,9 +67,10 @@ export function Navbar() {
   const { toggle } = useTheme();
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
-  // True only while GET /api/admin/stats (admin-gated) succeeds with the
-  // current session cookie — the backend ADMIN_EMAILS list remains fully
-  // server-side; no admin state is ever read from the browser.
+  // Effective role, probed from GET /api/hosts/status with the session
+  // cookie. Admin status comes from the same payload — both are decided
+  // server-side; nothing here is ever read from browser state.
+  const [isHost, setIsHost] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
 
   // Live Better Auth session, kept in sync by the reactive auth client —
@@ -76,32 +79,50 @@ export function Navbar() {
   const sessionUser = session?.user ?? null;
   const isAuthenticated = !isPending && Boolean(sessionUser);
 
-  // Probe admin status once per signed-in user. 401/403 responses simply
-  // leave the admin entries hidden; no admin capability is inferred locally.
+  // Probe the effective role once per signed-in user and on route changes
+  // (so activating host access is visible without a full reload). 401/403
+  // responses simply keep the customer links; capabilities are never
+  // inferred locally.
   useEffect(() => {
     let cancelled = false;
     const run = async () => {
       if (!sessionUser) {
         // Await first so no setState runs synchronously inside the effect.
         await Promise.resolve();
-        if (!cancelled) setIsAdmin(false);
+        if (!cancelled) {
+          setIsHost(false);
+          setIsAdmin(false);
+        }
         return;
       }
       try {
-        const response = await fetch(`${API_BASE_URL}/admin/stats`, {
+        const response = await fetch(`${API_BASE_URL}/hosts/status`, {
           credentials: "include",
           cache: "no-store",
         });
-        if (!cancelled) setIsAdmin(response.ok);
+        if (cancelled) return;
+        if (!response.ok) {
+          // Sessions that cannot be verified hide host/admin entries.
+          setIsHost(false);
+          setIsAdmin(false);
+          return;
+        }
+        const raw = await response.json().catch(() => null);
+        const data =
+          raw && typeof raw === "object" && "data" in raw
+            ? (raw as { data?: { isHost?: boolean; isAdmin?: boolean } }).data
+            : undefined;
+        setIsHost(Boolean(data?.isHost));
+        setIsAdmin(Boolean(data?.isAdmin));
       } catch {
-        // Network failure: leave admin entries hidden rather than guessing.
+        // Network failure: leave the customer menu rather than guessing.
       }
     };
     void run();
     return () => {
       cancelled = true;
     };
-  }, [sessionUser]);
+  }, [sessionUser, pathname]);
   const userImage = getUserImage(sessionUser?.image);
   const userInitials = getUserInitials(sessionUser?.name ?? null, sessionUser?.email ?? null);
   // Prefer the stored display name; fall back to the account email so the
@@ -216,7 +237,7 @@ export function Navbar() {
               <DropdownMenuContent align="end" className="w-56">
                 {/* Base UI requires the GroupLabel (DropdownMenuLabel) to sit
                     inside a group — rendering it bare crashes the menu. */}
-                <DropdownMenuGroup>
+                  <DropdownMenuGroup>
                   <DropdownMenuLabel className="flex items-center gap-2.5">
                     <Avatar className="size-9 shrink-0">
                       {userImage && (
@@ -235,17 +256,29 @@ export function Navbar() {
                       )}
                     </div>
                   </DropdownMenuLabel>
-                  <DropdownMenuItem render={<Link href="/add-studio" />}>
-                    <Plus className="size-4" /> Add New Studio
-                  </DropdownMenuItem>
-                  <DropdownMenuItem render={<Link href="/my-listings" />}>
-                    <ListPlus className="size-4" /> My Studio Listings
-                  </DropdownMenuItem>
+                  {/* Customer: Become a Host. Host/admin: the host tools. */}
+                  {isHost || isAdmin ? (
+                    <>
+                      <DropdownMenuItem render={<Link href="/host/dashboard" />}>
+                        <LayoutDashboard className="size-4" /> Host Dashboard
+                      </DropdownMenuItem>
+                      <DropdownMenuItem render={<Link href="/add-studio" />}>
+                        <Plus className="size-4" /> Add New Studio
+                      </DropdownMenuItem>
+                      <DropdownMenuItem render={<Link href="/my-listings" />}>
+                        <ListPlus className="size-4" /> My Listings
+                      </DropdownMenuItem>
+                      <DropdownMenuItem render={<Link href="/booking-requests" />}>
+                        <Inbox className="size-4" /> Booking Requests
+                      </DropdownMenuItem>
+                    </>
+                  ) : (
+                    <DropdownMenuItem render={<Link href="/become-a-host" />}>
+                      <Sparkles className="size-4" /> Become a Host
+                    </DropdownMenuItem>
+                  )}
                   <DropdownMenuItem render={<Link href="/my-bookings" />}>
                     <CalendarCheck className="size-4" /> My Bookings
-                  </DropdownMenuItem>
-                  <DropdownMenuItem render={<Link href="/booking-requests" />}>
-                    <Inbox className="size-4" /> Booking Requests
                   </DropdownMenuItem>
                   {isAdmin ? (
                     <DropdownMenuItem render={<Link href="/admin" />}>
@@ -326,31 +359,75 @@ export function Navbar() {
           </ul>
 
           <div className="mt-2 flex flex-col gap-3">
-            {isAdmin ? (
+            {isAuthenticated ? (
+              <>
+                {isAdmin ? (
+                  <Button
+                    variant="outline"
+                    size="lg"
+                    onClick={() => setMobileOpen(false)}
+                    render={<Link href="/admin" />}
+                  >
+                    Admin Dashboard
+                  </Button>
+                ) : null}
+                {isHost || isAdmin ? (
+                  <>
+                    <Button
+                      size="lg"
+                      onClick={() => setMobileOpen(false)}
+                      render={<Link href="/host/dashboard" />}
+                    >
+                      Host Dashboard
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="lg"
+                      onClick={() => setMobileOpen(false)}
+                      render={<Link href="/my-listings" />}
+                    >
+                      My Listings
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="lg"
+                      onClick={() => setMobileOpen(false)}
+                      render={<Link href="/booking-requests" />}
+                    >
+                      Booking Requests
+                    </Button>
+                  </>
+                ) : (
+                  <Button
+                    size="lg"
+                    onClick={() => setMobileOpen(false)}
+                    render={<Link href="/become-a-host" />}
+                  >
+                    Become a Host
+                  </Button>
+                )}
+                <Button
+                  variant="outline"
+                  size="lg"
+                  onClick={() => setMobileOpen(false)}
+                  render={<Link href="/my-bookings" />}
+                >
+                  My Bookings
+                </Button>
+              </>
+            ) : null}
+            {!isAuthenticated ? (
               <Button
                 variant="outline"
                 size="lg"
                 onClick={() => setMobileOpen(false)}
                 render={
-                  <Link href="/admin" onClick={() => setMobileOpen(false)} />
+                  <Link href="/login" onClick={() => setMobileOpen(false)} />
                 }
               >
-                Admin Dashboard
+                Login
               </Button>
             ) : null}
-            <Button
-              variant="outline"
-              size="lg"
-              onClick={() => setMobileOpen(false)}
-              render={
-                <Link
-                  href={isAuthenticated ? "/my-bookings" : "/login"}
-                  onClick={() => setMobileOpen(false)}
-                />
-              }
-            >
-              {isAuthenticated ? "My Bookings" : "Login"}
-            </Button>
             {isAuthenticated ? (
               <Button
                 size="lg"

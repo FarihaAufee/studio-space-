@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { ArrowLeft, Building2, ImageOff, Pencil } from "lucide-react";
 import { getServerSession } from "@/lib/session";
 import { isAdminEmail } from "@/lib/admin";
-import { getStudioById } from "@/lib/api";
+import { findStudioById } from "@/lib/db";
 import { StudioForm } from "@/components/studios/studio-form";
 import { AdminAccessDenied } from "@/components/admin/access-denied";
 import { Button } from "@/components/ui/button";
@@ -17,7 +17,7 @@ export async function generateMetadata({
   params,
 }: AdminStudioEditPageProps): Promise<Metadata> {
   const { id } = await params;
-  const studio = await getStudioById(id);
+  const studio = await findStudioById(id);
   return {
     title: studio
       ? `Admin · Edit ${studio.title} — StudioSpace`
@@ -42,8 +42,9 @@ export default async function AdminStudioEditPage({
   }
 
   const { id } = await params;
-  // getStudioById is the public read endpoint; fetch with server access.
-  const studio = await getStudioById(id);
+  // Server components read the database directly (same data the public
+  // GET /api/studios/:id route serves).
+  const studio = await findStudioById(id);
 
   if (!studio) {
     return (

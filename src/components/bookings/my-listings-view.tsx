@@ -42,9 +42,9 @@ import { authClient } from "@/lib/auth-client";
 
 /**
  * Host dashboard listing the studios signed in from the Better Auth session.
- * Data comes from GET /api/hosts/listings with browser credentials; until the
- * backend auth integration ships this endpoint responds 501, which renders an
- * honest "API not connected" state instead of pretending there is no content.
+ * Data comes from GET /api/hosts/listings with browser credentials; 403
+ * keeps the Become a Host onboarding visible, 401/5xx surface retryable
+ * error states.
  */
 export function MyListingsView() {
   const router = useRouter();
@@ -52,7 +52,7 @@ export function MyListingsView() {
 
   const [listings, setListings] = useState<Studio[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [apiReady, setApiReady] = useState(true);
+  const [forbidden, setForbidden] = useState(false);
   const [loading, setLoading] = useState(true);
 
   // Edit dialog + delete confirmation state.
@@ -70,11 +70,11 @@ export function MyListingsView() {
       const result = await parseApiResponse(response);
 
       if (response.ok) {
-        setApiReady(true);
+        setForbidden(false);
+        setError(null);
         setListings((result.data as Studio[]) ?? []);
       } else {
-        // 501 — backend auth middleware not integrated yet.
-        setApiReady(response.status !== 501);
+        setForbidden(response.status === 403);
         setError(result.message);
       }
     } catch {
@@ -98,10 +98,11 @@ export function MyListingsView() {
         if (cancelled) return;
 
         if (response.ok) {
-          setApiReady(true);
+          setForbidden(false);
+          setError(null);
           setListings((result.data as Studio[]) ?? []);
         } else {
-          setApiReady(response.status !== 501);
+          setForbidden(response.status === 403);
           setError(result.message);
         }
       } catch {
@@ -159,29 +160,42 @@ export function MyListingsView() {
     );
   }
 
-  /* Error / not-yet-connected state */
-  if (error) {
+  /* Error state — 403 keeps the onboarding path visible. */
+  if (forbidden) {
     return (
       <div className="flex flex-col items-center gap-4 rounded-3xl border border-border bg-card px-6 py-16 text-center">
         <span className="flex size-12 items-center justify-center rounded-full bg-muted text-muted-foreground">
-          {apiReady ? (
-            <ServerOff className="size-5" aria-hidden="true" />
-          ) : (
-            <CircleAlert className="size-5" aria-hidden="true" />
-          )}
+          <CircleAlert className="size-5" aria-hidden="true" />
+        </span>
+        <p className="font-heading text-2xl tracking-tight">
+          Host access required
+        </p>
+        <p className="max-w-md text-sm leading-relaxed text-muted-foreground">
+          Your listings are managed here once host access is active. Complete
+          the Become a Host onboarding to publish studios.
+        </p>
+        <Button render={<Link href="/become-a-host" />}>Become a Host</Button>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center gap-4 rounded-3xl border border-border bg-card px-6 py-16 text-center">
+        <span className="flex size-12 items-center justify-center rounded-full bg-destructive/10 text-destructive">
+          <ServerOff className="size-5" aria-hidden="true" />
         </span>
         <p className="font-heading text-2xl tracking-tight">
           Listings could not be loaded
         </p>
         <p className="max-w-md text-sm leading-relaxed text-muted-foreground">
-          {apiReady
-            ? error
-            : "The host listing API does not accept authenticated requests yet — it activates automatically once the backend connects to Better Auth. Nothing has been lost; your listings will appear here."}
+          {error}
         </p>
         <Button
           variant="outline"
           onClick={() => {
             setLoading(true);
+            setError(null);
             void loadListings();
           }}
         >

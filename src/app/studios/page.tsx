@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
 import { SearchX } from "lucide-react";
-import { getStudiosFiltered } from "@/lib/api";
+import { listStudios } from "@/lib/db";
 import type { Studio } from "@/app/studios/studios";
 import { CATEGORIES } from "@/data/categories";
 import { Button } from "@/components/ui/button";
@@ -48,19 +48,26 @@ function sortStudios(studios: Studio[], sort: string): Studio[] {
 
 async function FilteredStudios({ query }: { query: StudiosQuery }) {
   // Category values may arrive as slugs from homepage/filters links; the
-  // exact-match backend filter expects the stored title.
+  // db layer normalizes them to the stored title.
   const categoryTitle = resolveCategoryTitle(query.category);
 
-  const params = new URLSearchParams();
-  if (query.search) params.set("search", query.search);
-  if (categoryTitle) params.set("category", categoryTitle);
-  if (query.location) params.set("location", query.location);
-  if (query.minPrice) params.set("minPrice", query.minPrice);
-  if (query.maxPrice) params.set("maxPrice", query.maxPrice);
+  const toNumberOrNull = (value?: string) => {
+    if (!value || !value.trim()) return null;
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  };
 
   let studios: Studio[];
   try {
-    studios = await getStudiosFiltered(params);
+    // Server components read the database directly (same data the public
+    // GET /api/studios route serves) — no self-HTTP fetch is needed.
+    studios = await listStudios({
+      search: query.search ?? null,
+      category: categoryTitle ?? null,
+      location: query.location ?? null,
+      minPrice: toNumberOrNull(query.minPrice),
+      maxPrice: toNumberOrNull(query.maxPrice),
+    });
   } catch (error) {
     console.error(error);
     return (

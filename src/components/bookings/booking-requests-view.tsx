@@ -8,13 +8,12 @@ import {
   Check,
   CircleAlert,
   Clock,
-  Hourglass,
+  Inbox,
   Mail,
-  PlugZap,
   Users,
-  X,
 } from "lucide-react";
 import { toast } from "sonner";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { BookingStatusBadge } from "@/components/studios/status-badge";
@@ -23,20 +22,16 @@ import { formatBookingDate } from "@/types/booking";
 import { API_BASE_URL, parseApiResponse } from "@/lib/api";
 
 /**
- * Host inbox for incoming booking requests.
- *
- * The StudioSpace backend does not expose a "bookings awaiting host action"
- * endpoint yet (booking routes cover the guest side only), so the page loads
- * from GET /api/bookings/requests — a reserved integration point. Until that
- * endpoint exists the page shows a clear, honest setup card instead of fake
- * requests, and approve/reject actions call the matching PATCH endpoints so
- * the wiring lights up the moment the backend ships them.
+ * Host inbox for incoming booking requests. Loads GET /api/bookings/requests
+ * with browser credentials, then drives the PATCH approve/reject endpoints
+ * per request. Requires host access — 403 responses keep a pointer to the
+ * Become a Host onboarding visible.
  */
 export function BookingRequestsView() {
   const [requests, setRequests] = useState<BookingRecord[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [forbidden, setForbidden] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [endpointExists, setEndpointExists] = useState(true);
   const [processingId, setProcessingId] = useState<string | null>(null);
 
   // Shared loader for the retry action (event handlers may set state freely).
@@ -49,15 +44,15 @@ export function BookingRequestsView() {
       const result = await parseApiResponse(response);
 
       if (response.ok) {
-        setEndpointExists(true);
+        setForbidden(false);
+        setError(null);
         setRequests((result.data as BookingRecord[]) ?? []);
       } else {
-        // 404 — endpoint not part of the backend yet; 501 — auth not wired.
-        setEndpointExists(response.status !== 404);
+        setForbidden(response.status === 403);
         setError(result.message);
       }
     } catch {
-      setEndpointExists(false);
+      setForbidden(false);
       setError("We could not reach the StudioSpace API. Please try again.");
     } finally {
       setLoading(false);
@@ -78,15 +73,16 @@ export function BookingRequestsView() {
         if (cancelled) return;
 
         if (response.ok) {
-          setEndpointExists(true);
+          setForbidden(false);
+          setError(null);
           setRequests((result.data as BookingRecord[]) ?? []);
         } else {
-          setEndpointExists(response.status !== 404);
+          setForbidden(response.status === 403);
           setError(result.message);
         }
       } catch {
         if (cancelled) return;
-        setEndpointExists(false);
+        setForbidden(false);
         setError("We could not reach the StudioSpace API. Please try again.");
       } finally {
         if (!cancelled) setLoading(false);
@@ -148,59 +144,54 @@ export function BookingRequestsView() {
     );
   }
 
-  // Backend integration not available yet — keep it explicit and honest.
+  // Error / not-host state — 403 keeps the onboarding path visible.
+  if (forbidden) {
+    return (
+      <div className="flex flex-col items-center gap-4 rounded-3xl border border-border bg-card px-6 py-16 text-center">
+        <span className="flex size-12 items-center justify-center rounded-full bg-muted text-muted-foreground">
+          <Inbox className="size-5" aria-hidden="true" />
+        </span>
+        <p className="font-heading text-2xl tracking-tight">
+          Host access required
+        </p>
+        <p className="max-w-md text-sm leading-relaxed text-muted-foreground">
+          Booking requests arrive from guests who booked the studios you
+          listed. Complete the Become a Host onboarding to receive them.
+        </p>
+        <div className="flex flex-wrap items-center justify-center gap-3">
+          <Button render={<Link href="/become-a-host" />}>
+            Become a Host
+          </Button>
+          <Button variant="outline" onClick={() => {
+            setLoading(true);
+            setError(null);
+            setForbidden(false);
+            void loadRequests();
+          }}>
+            Retry
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   if (error || !requests) {
     return (
-      <div className="flex flex-col items-start gap-5 rounded-3xl border border-border bg-card p-6 shadow-[0_2px_24px_rgba(37,42,36,0.05)] sm:p-8">
-        <div className="flex items-center gap-3">
-          <span className="flex size-11 items-center justify-center rounded-full bg-muted text-muted-foreground">
-            <PlugZap className="size-5" aria-hidden="true" />
-          </span>
-          <div>
-            <p className="font-heading text-2xl tracking-tight">
-              Host inbox is ready — one endpoint away
-            </p>
-            <p className="mt-0.5 text-sm text-muted-foreground">
-              This dashboard is wired to the backend but the endpoints it needs
-              are not live yet.
-            </p>
-          </div>
-        </div>
-
-        <p className="text-sm leading-relaxed text-muted-foreground">
-          {endpointExists
-            ? error
-            : "No host-side booking API is published yet, so there are no requests to show. Nothing is being faked: when the endpoints below exist, this page loads and manages incoming requests automatically."}
+      <div className="flex flex-col items-center gap-4 rounded-3xl border border-border bg-card px-6 py-16 text-center">
+        <span className="flex size-12 items-center justify-center rounded-full bg-destructive/10 text-destructive">
+          <CircleAlert className="size-5" aria-hidden="true" />
+        </span>
+        <p className="font-heading text-2xl tracking-tight">
+          Requests could not be loaded
         </p>
-
-        <ul className="flex w-full flex-col gap-2.5 rounded-2xl border border-border bg-muted/50 p-4 text-sm">
-          <li className="flex items-center gap-2.5">
-            <Hourglass className="size-4 shrink-0 text-primary" aria-hidden="true" />
-            <code className="text-xs">GET /api/bookings/requests</code>
-            <span className="text-muted-foreground">— pending requests for your studios</span>
-          </li>
-          <li className="flex items-center gap-2.5">
-            <Check className="size-4 shrink-0 text-primary" aria-hidden="true" />
-            <code className="text-xs">PATCH /api/bookings/:id/approve</code>
-            <span className="text-muted-foreground">— confirm a request</span>
-          </li>
-          <li className="flex items-center gap-2.5">
-            <X className="size-4 shrink-0 text-primary" aria-hidden="true" />
-            <code className="text-xs">PATCH /api/bookings/:id/reject</code>
-            <span className="text-muted-foreground">— decline a request</span>
-          </li>
-        </ul>
-
-        <p className="flex items-center gap-2 text-xs text-muted-foreground">
-          <CircleAlert className="size-3.5 shrink-0" aria-hidden="true" />
-          Guest-side booking pages are live — approve/reject keeps working once
-          hosted sessions arrive.
+        <p className="max-w-md text-sm leading-relaxed text-muted-foreground">
+          {error}
         </p>
-
         <Button
           variant="outline"
           onClick={() => {
             setLoading(true);
+            setError(null);
             void loadRequests();
           }}
         >
