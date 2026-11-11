@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -36,7 +35,9 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { StudioForm } from "@/components/studios/studio-form";
+import { StudioImage } from "@/components/studios/studio-image";
 import type { Studio } from "@/app/studios/studios";
+import { studioPrimaryImage } from "@/lib/studio-images";
 import { API_BASE_URL, parseApiResponse } from "@/lib/api";
 import { authClient } from "@/lib/auth-client";
 
@@ -247,13 +248,12 @@ export function MyListingsView() {
               className="relative block aspect-[4/3] w-full overflow-hidden bg-muted"
               aria-label={`View ${studio.title} public page`}
             >
-              <Image
-                src={studio.image}
+              {/* Empty cover used to pass "" into next/image and crash the
+                  whole listing page; StudioImage renders the placeholder. */}
+              <StudioImage
+                src={studioPrimaryImage(studio)}
                 alt={studio.title}
-                fill
                 sizes="(min-width: 1024px) 24rem, (min-width: 640px) 50vw, 100vw"
-                className="object-cover"
-                unoptimized
               />
             </Link>
 
@@ -333,6 +333,7 @@ export function MyListingsView() {
                 location: editing.location,
                 address: editing.address,
                 image: editing.image,
+                images: editing.images,
                 overview: editing.overview,
                 hourlyRate: editing.hourlyRate,
                 securityDeposit: editing.securityDeposit,

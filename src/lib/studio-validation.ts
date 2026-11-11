@@ -1,4 +1,9 @@
 import { CATEGORIES } from "@/data/categories";
+import {
+  isValidImageUrl,
+  normalizeStudioImageList,
+  type StudioImage,
+} from "@/lib/studio-images";
 
 /**
  * Shared, server-only payload validation for studio create/update requests
@@ -12,7 +17,10 @@ export interface StudioDetailPayload {
   category: string;
   location: string;
   address: string;
+  /** Legacy cover image — kept in sync with images[0] for compatibility. */
   image: string;
+  /** Ordered image list; images[0] is the primary/cover image. */
+  images: StudioImage[];
   overview: string;
   hourlyRate: number;
   securityDeposit?: number;
@@ -49,8 +57,23 @@ export function parseStudioPayload(
   }
 
   const image = stringOf(body.image);
-  if (!image || !/^https?:\/\/\S+$/i.test(image) || image.length > 2048) {
-    errors.image = "Provide a direct http(s) image URL for the cover photo.";
+
+  /**
+   * Dual image input (backward compatible):
+   *  - `images`: the ordered list [{ url, source: "upload" | "url" }].
+   *  - `image`: the legacy flat cover URL — accepted alone (old clients)
+   *    and used as the fallback when `images` is missing/empty.
+   * The list is sanitized: valid http(s) URLs only, empty entries dropped.
+   */
+  let images = normalizeStudioImageList(body.images) ?? [];
+  if (images.length === 0 && image && isValidImageUrl(image)) {
+    images = [{ url: image, source: "url" }];
+  }
+  if (images.length === 0) {
+    errors.image =
+      "Add at least one image — upload a photo or paste a direct http(s) image URL.";
+  } else if (images.length > 12) {
+    errors.image = "A studio can hold at most 12 images.";
   }
 
   const overview = stringOf(body.overview);
@@ -139,7 +162,11 @@ export function parseStudioPayload(
       category: category as string,
       location: location as string,
       address: address as string,
-      image: image as string,
+      images,
+      // The flat cover field stays in sync with the ordered list so legacy
+      // readers (and booking snapshots) keep working. Validation guarantees
+      // a non-empty list here.
+      image: images[0]!.url,
       overview: overview as string,
       hourlyRate: Number(hourlyRate),
       ...(securityDeposit !== undefined ? { securityDeposit } : {}),

@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import {
@@ -40,8 +39,10 @@ import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
 import { authClient } from "@/lib/auth-client";
+import { useSignOut } from "@/hooks/use-sign-out";
 import { resizeImageFile } from "@/lib/profile-image";
 import { API_BASE_URL } from "@/lib/api";
+import { ConnectedAccounts } from "@/components/profile/connected-accounts";
 import { cn } from "cn";
 
 // Matches the pill input styling used across StudioSpace (auth forms).
@@ -190,8 +191,6 @@ function ProfileSkeleton() {
 }
 
 export function ProfileView() {
-  const router = useRouter();
-
   // Live Better Auth session — edits elsewhere stay in sync without a reload.
   const {
     data: session,
@@ -213,7 +212,9 @@ export function ProfileView() {
 
   const [passwordForm, setPasswordForm] = useState<PasswordFormState>(EMPTY_PASSWORD_FORM);
   const [changingPassword, setChangingPassword] = useState(false);
-  const [signingOut, setSigningOut] = useState(false);
+
+  // Shared logout flow (Better Auth signOut + toast + redirect home).
+  const { handleSignOut, isSigningOut } = useSignOut();
 
   // Effective role, probed server-side (GET /api/hosts/status) so the
   // quick links stay honest for customers, hosts, and admins.
@@ -398,18 +399,6 @@ export function ProfileView() {
       toast.error(toErrorMessage(thrown, "Something went wrong. Please try again."));
     } finally {
       setChangingPassword(false);
-    }
-  };
-
-  const handleSignOut = async () => {
-    setSigningOut(true);
-    try {
-      await authClient.signOut();
-      toast.success("You have been signed out.");
-      router.push("/login");
-    } catch {
-      toast.error("Something went wrong while signing out. Please try again.");
-      setSigningOut(false);
     }
   };
 
@@ -763,6 +752,13 @@ export function ProfileView() {
 
               <Separator />
 
+              {/* OAuth providers linked to this account (explicit flow —
+                  Better Auth never auto-links an OAuth identity into an
+                  existing password account without a verified local email). */}
+              <ConnectedAccounts />
+
+              <Separator />
+
               {/* Quick links — role-aware: customers get the host
                   onboarding, hosts get the listing manager. */}
               <section className="flex flex-col gap-3" aria-label="Quick links">
@@ -790,9 +786,9 @@ export function ProfileView() {
                 variant="outline"
                 className="text-destructive hover:bg-destructive/10 hover:text-destructive"
                 onClick={() => void handleSignOut()}
-                disabled={signingOut}
+                disabled={isSigningOut}
               >
-                {signingOut ? (
+                {isSigningOut ? (
                   <>
                     <Spinner className="size-4" /> Signing out…
                   </>

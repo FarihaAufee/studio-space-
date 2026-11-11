@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { cache } from "react";
-import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
@@ -14,6 +13,8 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { BookingCard } from "@/components/studios/booking-card";
 import { findStudioById } from "@/lib/db";
+import { getStudioImages } from "@/lib/studio-images";
+import { StudioImage } from "@/components/studios/studio-image";
 import type { Studio } from "@/app/studios/studios";
 
 // Cache Components migration: this route resolves studio details from the
@@ -69,6 +70,10 @@ export default async function StudioDetailsPage({
 
   if (!studio) notFound();
 
+  // Ordered gallery — index 0 is the cover; legacy `image`-only documents
+  // normalize to a single-entry list so every studio renders the same way.
+  const gallery = getStudioImages(studio);
+
   return (
     <main className="min-h-screen bg-background">
       <div className="container-page pb-16 pt-4 md:pb-24 md:pt-6">
@@ -82,14 +87,12 @@ export default async function StudioDetailsPage({
 
         {/* Image gallery */}
         <figure className="relative mt-4 aspect-[16/10] w-full overflow-hidden rounded-3xl border border-border bg-muted shadow-[0_14px_48px_rgba(37,42,36,0.10)] sm:aspect-[2/1] lg:aspect-[21/9]">
-          <Image
-            src={studio.image}
+          <StudioImage
+            src={gallery[0]?.url}
             alt={studio.title}
-            fill
             priority
             sizes="(min-width: 1280px) 80rem, 100vw"
-            className="object-cover"
-            unoptimized
+            label="No cover photo yet"
           />
           <figcaption className="absolute inset-x-0 bottom-0 flex flex-wrap items-center gap-2 p-4 sm:p-6">
             <Badge
@@ -108,6 +111,28 @@ export default async function StudioDetailsPage({
             </Badge>
           </figcaption>
         </figure>
+
+        {/* Thumbnail strip — only for studios with more than one image. */}
+        {gallery.length > 1 && (
+          <div className="mt-3 grid grid-cols-4 gap-3 sm:grid-cols-6 lg:grid-cols-8">
+            {gallery.map((image, index) => (
+              <div
+                key={`${image.url}-${index}`}
+                className="relative aspect-square overflow-hidden rounded-xl border border-border bg-muted"
+              >
+                {/* Each thumbnail fails independently — one dead URL can't
+                    take down the strip. */}
+                <StudioImage
+                  src={image.url}
+                  alt={`${studio.title} photo ${index + 1}`}
+                  sizes="(min-width: 1024px) 10rem, 20vw"
+                  compact
+                  label={false}
+                />
+              </div>
+            ))}
+          </div>
+        )}
 
         <div className="mt-8 grid items-start gap-10 lg:grid-cols-[minmax(0,1fr)_360px] lg:gap-12">
           {/* Studio information */}

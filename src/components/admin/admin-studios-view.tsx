@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import Image from "next/image";
 import Link from "next/link";
 import { toast } from "sonner";
 import {
@@ -30,6 +29,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import type { Studio } from "@/app/studios/studios";
 import { CATEGORIES } from "@/data/categories";
+import { studioPrimaryImage } from "@/lib/studio-images";
+import { StudioImage } from "@/components/studios/studio-image";
 import { API_BASE_URL, parseApiResponse } from "@/lib/api";
 
 /**
@@ -292,13 +293,11 @@ export function AdminStudiosView() {
               className="relative block aspect-[4/3] w-full overflow-hidden bg-muted"
               aria-label={`View ${studio.title} public page`}
             >
-              <Image
-                src={studio.image}
+              {/* Same empty-cover crash guard as My Listings. */}
+              <StudioImage
+                src={studioPrimaryImage(studio)}
                 alt={studio.title}
-                fill
                 sizes="(min-width: 1024px) 24rem, (min-width: 640px) 50vw, 100vw"
-                className="object-cover"
-                unoptimized
               />
             </Link>
 

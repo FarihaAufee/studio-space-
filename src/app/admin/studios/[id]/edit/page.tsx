@@ -109,6 +109,7 @@ export default async function AdminStudioEditPage({
                 // `description` instead of `overview`.
                 overview: studio.overview ?? studio.description ?? "",
                 image: studio.image,
+                images: studio.images,
                 hourlyRate: studio.hourlyRate,
                 securityDeposit: studio.securityDeposit,
                 maxCapacity: studio.maxCapacity,

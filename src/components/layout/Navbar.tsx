@@ -22,6 +22,7 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/ui/logo";
+import { Spinner } from "@/components/ui/spinner";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -32,6 +33,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useTheme } from "@/hooks/use-theme";
+import { useSignOut } from "@/hooks/use-sign-out";
 import { authClient } from "@/lib/auth-client";
 import { API_BASE_URL } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -132,9 +134,10 @@ export function Navbar() {
       ? sessionUser.name.trim()
       : sessionUser?.email || "Account";
 
-  const handleSignOut = async () => {
-    await authClient.signOut();
-  };
+  // Shared logout flow: Better Auth signOut, toast feedback, refresh of the
+  // server-rendered session state and redirect to the homepage. isSigningOut
+  // drives the loading state on both the desktop dropdown and mobile button.
+  const { handleSignOut, isSigningOut } = useSignOut();
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 8);
@@ -292,12 +295,23 @@ export function Navbar() {
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   variant="destructive"
+                  disabled={isSigningOut}
                   onSelect={(event) => {
+                    // Keep the menu open so the loading feedback stays
+                    // visible until the sign-out request settles.
                     event.preventDefault();
                     void handleSignOut();
                   }}
                 >
-                  <LogOut className="size-4" /> Logout
+                  {isSigningOut ? (
+                    <>
+                      <Spinner className="size-4" /> Logging out…
+                    </>
+                  ) : (
+                    <>
+                      <LogOut className="size-4" /> Logout
+                    </>
+                  )}
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -431,10 +445,18 @@ export function Navbar() {
             {isAuthenticated ? (
               <Button
                 size="lg"
-                disabled={isPending}
+                disabled={isSigningOut || isPending}
                 onClick={() => void handleSignOut()}
               >
-                Logout
+                {isSigningOut ? (
+                  <>
+                    <Spinner className="size-4" /> Logging out…
+                  </>
+                ) : (
+                  <>
+                    <LogOut className="size-4" /> Logout
+                  </>
+                )}
               </Button>
             ) : (
               <Button

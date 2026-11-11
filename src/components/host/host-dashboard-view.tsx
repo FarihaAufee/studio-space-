@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Image from "next/image";
 import Link from "next/link";
 import {
   CalendarCheck,
@@ -21,6 +20,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { BookingStatusBadge } from "@/components/studios/status-badge";
+import { StudioImage } from "@/components/studios/studio-image";
 import type { BookingRecord } from "@/types/booking";
 import { formatBookingDate } from "@/types/booking";
 import type { HostProfile } from "@/types/host";
@@ -326,16 +326,13 @@ export function HostDashboardView() {
                 className="flex flex-col gap-3 rounded-2xl border border-border bg-background p-4 sm:flex-row sm:items-center"
               >
                 <div className="relative aspect-[4/3] w-full overflow-hidden rounded-xl bg-muted sm:aspect-auto sm:h-14 sm:w-20 sm:shrink-0">
-                  {request.studioImage ? (
-                    <Image
-                      src={request.studioImage}
-                      alt={request.studioTitle ?? "Booking request"}
-                      fill
-                      sizes="80px"
-                      className="object-cover"
-                      unoptimized
-                    />
-                  ) : null}
+                  <StudioImage
+                    src={request.studioImage}
+                    alt={request.studioTitle ?? "Booking request"}
+                    sizes="80px"
+                    compact
+                    label={false}
+                  />
                 </div>
                 <div className="flex min-w-0 flex-1 flex-col gap-1">
                   <div className="flex flex-wrap items-center justify-between gap-2">

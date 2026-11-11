@@ -1,7 +1,8 @@
-import Image from "next/image";
 import Link from "next/link";
 import { ArrowUpRight, MapPin, Users } from "lucide-react";
 import type { Studio } from "@/app/studios/studios";
+import { studioPrimaryImage } from "@/lib/studio-images";
+import { StudioImage } from "@/components/studios/studio-image";
 
 /**
  * Responsive studio card used by the studios gallery, category pages and
@@ -10,6 +11,8 @@ import type { Studio } from "@/app/studios/studios";
  */
 export function StudioCard({ studio, eager }: { studio: Studio; eager?: boolean }) {
   const capacity = studio.maxCapacity;
+  // Primary/cover image — works for new `images` lists and legacy docs alike.
+  const image = studioPrimaryImage(studio);
 
   return (
     <Link
@@ -18,14 +21,13 @@ export function StudioCard({ studio, eager }: { studio: Studio; eager?: boolean 
       aria-label={`View ${studio.title}`}
     >
       <div className="relative aspect-[4/3] w-full overflow-hidden bg-muted">
-        <Image
-          src={studio.image}
+        {/* Handles missing and broken images with the themed placeholder. */}
+        <StudioImage
+          src={image}
           alt={studio.title}
-          fill
           sizes="(min-width: 1024px) 24rem, (min-width: 640px) 50vw, 100vw"
-          loading={eager ? "eager" : undefined}
-          className="object-cover transition-transform duration-500 group-hover:scale-[1.04]"
-          unoptimized
+          eager={eager}
+          className="transition-transform duration-500 group-hover:scale-[1.04]"
         />
         {/* Category chip over a dark scrim remains readable on any photo. */}
         <span className="absolute top-3 left-3 inline-flex items-center rounded-full bg-[#252A24]/70 px-3 py-1 text-xs font-medium text-[#F7F5EF] backdrop-blur-sm">

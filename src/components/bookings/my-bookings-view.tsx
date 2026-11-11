@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import Image from "next/image";
 import Link from "next/link";
 import {
   CalendarDays,
@@ -10,7 +9,8 @@ import {
   Inbox,
   ServerOff,
   Users,
-} from "lucide-react";import { Button } from "@/components/ui/button";
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
 import {
   Tabs,
   TabsContent,
@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { BookingStatusBadge } from "@/components/studios/status-badge";
+import { StudioImage } from "@/components/studios/studio-image";
 import type { BookingRecord } from "@/types/booking";
 import { formatBookingDate } from "@/types/booking";
 import { API_BASE_URL, parseApiResponse } from "@/lib/api";
@@ -106,16 +107,13 @@ export function MyBookingsView() {
       aria-label={`Open booking details for ${booking.studioTitle ?? "your booking"}`}
     >
       <div className="relative aspect-[4/3] w-full overflow-hidden rounded-2xl bg-muted sm:aspect-auto sm:h-24 sm:w-36 sm:shrink-0">
-        {booking.studioImage ? (
-          <Image
-            src={booking.studioImage}
-            alt={booking.studioTitle ?? "Booked studio"}
-            fill
-            sizes="(min-width: 640px) 144px, 100vw"
-            className="object-cover"
-            unoptimized
-          />
-        ) : null}
+        <StudioImage
+          src={booking.studioImage}
+          alt={booking.studioTitle ?? "Booked studio"}
+          sizes="(min-width: 640px) 144px, 100vw"
+          compact
+          label={false}
+        />
       </div>
 
       <div className="flex min-w-0 flex-1 flex-col gap-1.5">

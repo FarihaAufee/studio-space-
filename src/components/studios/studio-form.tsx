@@ -1,15 +1,16 @@
 "use client";
 
 import { useState } from "react";
-import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Camera, Check, ImageOff, Plus, Save, X } from "lucide-react";
+import { Camera, Check, Plus, Save, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { CATEGORIES } from "@/data/categories";
 import { API_BASE_URL, parseApiResponse } from "@/lib/api";
+import { StudioImageManager } from "@/components/studios/studio-image-manager";
+import { getStudioImages, type StudioImage } from "@/lib/studio-images";
 
 /**
  * Shared studio form for creating a listing (/add-studio) and editing an
@@ -40,7 +41,10 @@ interface StudioFormProps {
     category?: string;
     location?: string;
     address?: string;
+    /** Legacy cover image — normalized into `images` when alone. */
     image?: string;
+    /** Ordered gallery (index 0 is the cover) from the API. */
+    images?: StudioImage[];
     overview?: string;
     hourlyRate?: number;
     securityDeposit?: number;
@@ -62,7 +66,6 @@ interface FormState {
   category: string;
   location: string;
   address: string;
-  image: string;
   overview: string;
   hourlyRate: string;
   securityDeposit: string;
@@ -74,7 +77,6 @@ const EMPTY_FORM: FormState = {
   category: "",
   location: "",
   address: "",
-  image: "",
   overview: "",
   hourlyRate: "",
   securityDeposit: "",
@@ -99,13 +101,17 @@ export function StudioForm({
     category: initial?.category ?? "",
     location: initial?.location ?? "",
     address: initial?.address ?? "",
-    image: initial?.image ?? "",
     overview: initial?.overview ?? "",
     hourlyRate: initial?.hourlyRate !== undefined ? String(initial.hourlyRate) : "",
     securityDeposit:
       initial?.securityDeposit !== undefined ? String(initial.securityDeposit) : "",
     maxCapacity: initial?.maxCapacity !== undefined ? String(initial.maxCapacity) : "",
   });
+  // Ordered image list (index 0 = cover). Legacy `initial.image`-only
+  // documents are normalized so old listings keep editing seamlessly.
+  const [images, setImages] = useState<StudioImage[]>(
+    getStudioImages({ image: initial?.image, images: initial?.images })
+  );
   const [hostNameValue, setHostNameValue] = useState(
     initial?.hostName ?? hostName ?? ""
   );
@@ -147,12 +153,23 @@ export function StudioForm({
       return;
     }
 
+    // At least one image (uploaded or URL) is required — the first one is
+    // the cover and mirrors the legacy flat `image` field for old readers.
+    if (images.length === 0) {
+      setFieldErrors({
+        image: "Add at least one image — upload a photo or paste a direct http(s) image URL.",
+      });
+      setNotice("Please add at least one image before saving.");
+      return;
+    }
+
     const payload: Record<string, unknown> = {
       title: form.title.trim(),
       category: form.category,
       location: form.location.trim(),
       address: form.address.trim(),
-      image: form.image.trim(),
+      images,
+      image: images[0]!.url,
       overview: form.overview.trim(),
       amenities,
     };
@@ -353,45 +370,11 @@ export function StudioForm({
         <h2 className="font-heading text-xl tracking-tight">Presentation</h2>
 
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="studio-image" className="pl-4">Cover image URL</Label>
-          <div className="grid items-start gap-4 sm:grid-cols-[10rem_1fr]">
-            {/* Preview keeps the host honest about the cover image. */}
-            <div className="relative aspect-square w-full overflow-hidden rounded-2xl border border-border bg-muted sm:w-40">
-              {form.image.trim() ? (
-                <Image
-                  src={form.image.trim()}
-                  alt="Cover preview"
-                  fill
-                  sizes="160px"
-                  className="object-cover"
-                  unoptimized
-                />
-              ) : (
-                <span className="flex h-full flex-col items-center justify-center gap-1.5 text-muted-foreground">
-                  <ImageOff className="size-5" aria-hidden="true" />
-                  <span className="text-[0.65rem]">No preview yet</span>
-                </span>
-              )}
-            </div>
-            <div className="flex flex-col gap-1.5">
-              <input
-                id="studio-image"
-                value={form.image}
-                onChange={(event) => setField("image", event.target.value)}
-                placeholder="https://images.unsplash.com/…"
-                className={pillInputClasses}
-                inputMode="url"
-                aria-invalid={Boolean(fieldErrors.image)}
-                required
-              />
-              {fieldErrors.image && (
-                <p className="text-xs text-destructive">{fieldErrors.image}</p>
-              )}
-              <p className="text-xs text-muted-foreground">
-                Paste a direct link to a hosted photo of your space.
-              </p>
-            </div>
-          </div>
+          <Label className="pl-4">Photos</Label>
+          <StudioImageManager value={images} onChange={setImages} disabled={submitting} />
+          {fieldErrors.image && (
+            <p className="pl-4 text-xs text-destructive">{fieldErrors.image}</p>
+          )}
         </div>
 
         <div className="flex flex-col gap-1.5">

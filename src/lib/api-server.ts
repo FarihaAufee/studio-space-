@@ -56,7 +56,9 @@ export function jsonError(
     | 404
     | 405
     | 409
-    | 500,
+    | 500
+    | 502
+    | 503,
   message: string,
   errors?: Record<string, string>
 ): Response {

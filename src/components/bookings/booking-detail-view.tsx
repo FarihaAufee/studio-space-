@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import Image from "next/image";
 import Link from "next/link";
 import { toast } from "sonner";
 import {
@@ -10,7 +9,6 @@ import {
   CircleAlert,
   Clock,
   FileText,
-  ImageOff,
   Mail,
   MapPin,
   Phone,
@@ -34,6 +32,7 @@ import {
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { BookingStatusBadge } from "@/components/studios/status-badge";
+import { StudioImage } from "@/components/studios/studio-image";
 import type { BookingRecord } from "@/types/booking";
 import { formatBookingDate, formatTimestamp } from "@/types/booking";
 import { API_BASE_URL, parseApiResponse } from "@/lib/api";
@@ -201,20 +200,11 @@ export function BookingDetailView({ bookingId }: { bookingId: string }) {
         {/* Studio snapshot */}
         <Card className="overflow-hidden rounded-3xl border-border/70 py-0 shadow-[0_2px_24px_rgba(37,42,36,0.05)]">
           <div className="relative aspect-[16/9] w-full overflow-hidden bg-muted sm:aspect-[2/1]">
-            {booking.studioImage ? (
-              <Image
-                src={booking.studioImage}
-                alt={booking.studioTitle ?? "Booked studio"}
-                fill
-                sizes="(min-width: 1024px) 56rem, 100vw"
-                className="object-cover"
-                unoptimized
-              />
-            ) : (
-              <span className="flex h-full items-center justify-center text-muted-foreground">
-                <ImageOff className="size-6" aria-hidden="true" />
-              </span>
-            )}
+            <StudioImage
+              src={booking.studioImage}
+              alt={booking.studioTitle ?? "Booked studio"}
+              sizes="(min-width: 1024px) 56rem, 100vw"
+            />
           </div>
           <CardContent className="flex flex-wrap items-center justify-between gap-3 p-5">
             <div className="min-w-0">

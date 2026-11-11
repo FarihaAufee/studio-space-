@@ -1,6 +1,7 @@
-import { ObjectId, type Filter, type WithId } from "mongodb";
-import { mongoDb } from "@/lib/mongodb";
+import { ObjectId, type Collection, type Filter, type WithId } from "mongodb";
+import { getMongoDb } from "@/lib/mongodb";
 import { CATEGORIES } from "@/data/categories";
+import { getStudioImages } from "@/lib/studio-images";
 import type { BookingRecord } from "@/types/booking";
 import type { Studio } from "@/app/studios/studios";
 import type { HostApplication } from "@/types/host";
@@ -66,12 +67,20 @@ export function isObjectIdShape(id: string): boolean {
  */
 export function toStudio(raw: WithId<Record<string, unknown>>): Studio {
   const doc = serialize(raw);
+  // Dual image model: prefer the ordered `images` list, falling back to the
+  // legacy flat `image` string — no manual migration needed for old docs.
+  const images = getStudioImages({
+    image: doc.image as string | undefined,
+    images: doc.images,
+  });
   return {
     _id: String(doc._id),
     title: (doc.title as string) ?? "",
     category: (doc.category as string) ?? "",
     location: (doc.location as string) ?? "",
-    image: (doc.image as string) ?? "",
+    image:
+      images[0]?.url ?? ((doc.image as string | undefined) ?? ""),
+    images: images.length > 0 ? images : undefined,
     hourlyRate: Number(doc.hourlyRate) || 0,
     securityDeposit: doc.securityDeposit === undefined ? undefined : Number(doc.securityDeposit),
     maxCapacity: doc.maxCapacity === undefined ? undefined : Number(doc.maxCapacity),
@@ -144,11 +153,24 @@ export function toHostApplication(
  * slugs and normalize stored category values.
  */
 
-const StudioCol = mongoDb.collection<Record<string, unknown>>(STUDIO_COLLECTION);
-const BookingCol = mongoDb.collection<Record<string, unknown>>(BOOKING_COLLECTION);
-const HostApplicationCol = mongoDb.collection<Record<string, unknown>>(
-  HOST_APPLICATION_COLLECTION
-);
+/**
+ * Collection accessors — resolved through getMongoDb() at CALL time.
+ *
+ * Collections are deliberately NOT captured at module scope: after a
+ * reconnection (see src/lib/mongodb.ts) the handles must be re-derived from
+ * the connected Db, so no function can ever operate against a stale
+ * reference of a closed topology.
+ */
+type AnyCol = Collection<Record<string, unknown>>;
+
+async function getCollection(name: string): Promise<AnyCol> {
+  return (await getMongoDb()).collection<Record<string, unknown>>(name);
+}
+
+const getStudioCol = () => getCollection(STUDIO_COLLECTION);
+const getBookingCol = () => getCollection(BOOKING_COLLECTION);
+const getHostApplicationCol = () => getCollection(HOST_APPLICATION_COLLECTION);
+const getUserCol = () => getCollection(USER_COLLECTION);
 
 /* ------------------------------------------------------------------ */
 /* Studios (public browsing + host CRUD)                               */
@@ -235,6 +257,7 @@ function escapeRegex(value: string): string {
 }
 /** Public gallery list, newest first. */
 export async function listStudios(query: StudioQuery): Promise<Studio[]> {
+  const StudioCol = await getStudioCol();
   const docs = await StudioCol.find(studioFilter(query))
     .sort({ createdAt: -1, _id: -1 })
     .limit(200)
@@ -244,6 +267,7 @@ export async function listStudios(query: StudioQuery): Promise<Studio[]> {
 
 /** Latest 6 studios for the home page carousel. */
 export async function listFeaturedStudios(): Promise<Studio[]> {
+  const StudioCol = await getStudioCol();
   const docs = await StudioCol.find({})
     .sort({ createdAt: -1, _id: -1 })
     .limit(6)
@@ -253,6 +277,7 @@ export async function listFeaturedStudios(): Promise<Studio[]> {
 
 /** Single studio by id ("dual id" matching keeps legacy documents working). */
 export async function findStudioById(id: string): Promise<Studio | null> {
+  const StudioCol = await getStudioCol();
   const doc = await StudioCol.findOne(idFilter(id));
   return doc ? toStudio(doc) : null;
 }
@@ -261,6 +286,7 @@ export async function findStudioById(id: string): Promise<Studio | null> {
 export async function listCategorySummaries(): Promise<
   Array<{ title: string; slug: string; image: string; count: number }>
 > {
+  const StudioCol = await getStudioCol();
   const groups = await StudioCol.aggregate<{
     _id: string | null;
     count: number;
@@ -299,6 +325,7 @@ export async function listStudiosByCategory(category: string): Promise<Studio[]>
     (item) => item.slug.toLowerCase() === decoded.toLowerCase()
   );
   const value = slugMatch ? slugMatch.title : decoded;
+  const StudioCol = await getStudioCol();
   const docs = await StudioCol.find({
     category: { $options: "i", $regex: `^${escapeRegex(value)}$` },
   } as Filter<Record<string, unknown>>)
@@ -314,6 +341,7 @@ export async function listStudiosByCategory(category: string): Promise<Studio[]>
 
 /** Studios owned by one host id (hostId stores the Better Auth user id). */
 export async function listHostListings(hostId: string): Promise<Studio[]> {
+  const StudioCol = await getStudioCol();
   const docs = await StudioCol.find({ hostId })
     .sort({ createdAt: -1, _id: -1 })
     .limit(100)
@@ -324,10 +352,12 @@ export async function listHostListings(hostId: string): Promise<Studio[]> {
 export type RawStudioDoc = WithId<Record<string, unknown>>;
 
 export async function findStudioDocById(id: string): Promise<RawStudioDoc | null> {
+  const StudioCol = await getStudioCol();
   return StudioCol.findOne(idFilter(id));
 }
 
 export async function countHostListings(hostId: string): Promise<number> {
+  const StudioCol = await getStudioCol();
   return StudioCol.countDocuments({ hostId });
 }
 
@@ -344,6 +374,7 @@ export async function setStudioFields(
   id: string,
   detail: Record<string, unknown>
 ): Promise<boolean> {
+  const StudioCol = await getStudioCol();
   const result = await StudioCol.updateOne(idFilter(id), {
     $set: { ...detail, updatedAt: new Date() },
   });
@@ -358,6 +389,7 @@ export interface DeleteStudioResult {
 
 /** Removes one studio and returns the deleted snapshot for the response. */
 export async function deleteStudioDoc(id: string): Promise<DeleteStudioResult> {
+  const StudioCol = await getStudioCol();
   const deleted = await StudioCol.findOneAndDelete(idFilter(id));
   if (!deleted) return { matched: false };
   return { deletedStudio: deleted, matched: true };
@@ -367,6 +399,7 @@ export async function deleteStudioDoc(id: string): Promise<DeleteStudioResult> {
 export async function createStudioDoc(
   detail: Record<string, unknown>
 ): Promise<RawStudioDoc> {
+  const StudioCol = await getStudioCol();
   const now = new Date();
   const inserted = await StudioCol.insertOne({
     ...detail,
@@ -387,6 +420,7 @@ export async function listMyBookings(
   userId: string,
   email: string
 ): Promise<BookingRecord[]> {
+  const BookingCol = await getBookingCol();
   const docs = await BookingCol.find({
     $or: [{ userId }, ...(email ? [{ email }] : [])],
   } as Filter<Record<string, unknown>>)
@@ -400,6 +434,7 @@ export async function listMyBookings(
 export async function listBookingRequestsForHost(
   hostId: string
 ): Promise<BookingRecord[]> {
+  const BookingCol = await getBookingCol();
   const docs = await BookingCol.find({ hostId })
     .sort({ createdAt: -1, _id: -1 })
     .limit(200)
@@ -409,6 +444,7 @@ export async function listBookingRequestsForHost(
 
 /** Admin variant: every booking, newest first. */
 export async function listAllBookings(): Promise<BookingRecord[]> {
+  const BookingCol = await getBookingCol();
   const docs = await BookingCol.find({})
     .sort({ createdAt: -1, _id: -1 })
     .limit(300)
@@ -419,6 +455,7 @@ export async function listAllBookings(): Promise<BookingRecord[]> {
 export async function findBookingDocById(
   id: string
 ): Promise<RawBookingDoc | null> {
+  const BookingCol = await getBookingCol();
   return BookingCol.findOne(idFilter(id));
 }
 export type RawBookingDoc = WithId<Record<string, unknown>>;
@@ -427,6 +464,7 @@ export type RawBookingDoc = WithId<Record<string, unknown>>;
 export async function createBookingDoc(
   detail: Record<string, unknown>
 ): Promise<RawBookingDoc> {
+  const BookingCol = await getBookingCol();
   const now = new Date();
   const inserted = await BookingCol.insertOne({
     ...detail,
@@ -452,6 +490,7 @@ export async function transitionBookingStatus(
   to: "confirmed" | "cancelled",
   extra: Record<string, unknown>
 ): Promise<RawBookingDoc | null> {
+  const BookingCol = await getBookingCol();
   const result = await BookingCol.findOneAndUpdate(
     { ...idFilter(id), status: { $in: from } } as never,
     { $set: { status: to, ...extra, updatedAt: new Date() } },
@@ -469,9 +508,14 @@ export async function getAdminStats(): Promise<{
   totalUsers: number;
   totalBookings: number;
 }> {
+  const [StudioCol, BookingCol, userCol] = await Promise.all([
+    getStudioCol(),
+    getBookingCol(),
+    getUserCol(),
+  ]);
   const [totalStudios, totalUsers, totalBookings] = await Promise.all([
     StudioCol.countDocuments({}),
-    mongoDb.collection("user").countDocuments({}),
+    userCol.countDocuments({}),
     BookingCol.countDocuments({}),
   ]);
   return { totalStudios, totalUsers, totalBookings };
@@ -498,7 +542,7 @@ function slugify(value: string): string {
  * user id explicitly; no client value ever reaches this query.
  */
 export async function activateHostRole(userId: string): Promise<boolean> {
-  const userCol = mongoDb.collection<Record<string, unknown>>(USER_COLLECTION);
+  const userCol = await getUserCol();
   const filter = /^[0-9a-fA-F]{24}$/.test(userId)
     ? { $or: [{ _id: new ObjectId(userId) }, { _id: userId }] }
     : { _id: userId };
@@ -518,6 +562,7 @@ export async function activateHostRole(userId: string): Promise<boolean> {
 export async function findLatestHostApplication(
   userId: string
 ): Promise<HostApplication | null> {
+  const HostApplicationCol = await getHostApplicationCol();
   const doc = await HostApplicationCol.findOne(
     { userId } as Filter<Record<string, unknown>>,
     { sort: { createdAt: -1, _id: -1 } }
@@ -539,6 +584,7 @@ export async function upsertHostApplication(
   email: string
 ): Promise<HostApplication> {
   const now = new Date();
+  const HostApplicationCol = await getHostApplicationCol();
   const existing = await findLatestHostApplication(userId);
 
   if (existing) {

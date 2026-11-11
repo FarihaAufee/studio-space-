@@ -6,12 +6,19 @@
  * cover legacy documents and server-side defaults so every page renders
  * defensively.
  */
+import type { StudioImage } from "@/lib/studio-images";
+
 export interface Studio {
   _id: string;
   title: string;
   category: string;
   location: string;
   image: string;
+  /**
+   * Ordered gallery — index 0 mirrors `image` (the cover). Legacy documents
+   * without the array keep working via the flat `image` field.
+   */
+  images?: StudioImage[];
   hourlyRate: number;
   securityDeposit?: number;
   maxCapacity?: number;

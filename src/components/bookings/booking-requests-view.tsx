@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import Image from "next/image";
 import {
   Ban,
   CalendarDays,
@@ -17,6 +16,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { BookingStatusBadge } from "@/components/studios/status-badge";
+import { StudioImage } from "@/components/studios/studio-image";
 import type { BookingRecord } from "@/types/booking";
 import { formatBookingDate } from "@/types/booking";
 import { API_BASE_URL, parseApiResponse } from "@/lib/api";
@@ -218,16 +218,13 @@ export function BookingRequestsView() {
           className="flex flex-col gap-4 rounded-3xl border border-border bg-card p-4 shadow-[0_2px_24px_rgba(37,42,36,0.05)] sm:flex-row sm:items-center sm:p-5"
         >
           <div className="relative aspect-[4/3] w-full overflow-hidden rounded-2xl bg-muted sm:aspect-auto sm:h-24 sm:w-36 sm:shrink-0">
-            {request.studioImage ? (
-              <Image
-                src={request.studioImage}
-                alt={request.studioTitle ?? "Booking request"}
-                fill
-                sizes="144px"
-                className="object-cover"
-                unoptimized
-              />
-            ) : null}
+            <StudioImage
+              src={request.studioImage}
+              alt={request.studioTitle ?? "Booking request"}
+              sizes="144px"
+              compact
+              label={false}
+            />
           </div>
 
           <div className="flex min-w-0 flex-1 flex-col gap-1.5">
