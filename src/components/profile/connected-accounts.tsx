@@ -119,7 +119,7 @@ export function ConnectedAccounts() {
       callbackURL: "/profile",
     });
     if (error) {
-      toast.error(error.message || `Could not start connecting ${provider}.`);
+      toast.error(error.message || `Could not start connecting ${provider.name}.`);
       setBusyProvider(null);
     }
     // On success the browser leaves for the provider — nothing else to do.
@@ -146,7 +146,7 @@ export function ConnectedAccounts() {
           "For security, please sign out and sign in again, then try disconnecting."
         );
       } else {
-        toast.error(error.message || `Could not disconnect ${provider}.`);
+        toast.error(error.message || `Could not disconnect ${provider.name}.`);
       }
     } else {
       toast.success(`${provider.name} disconnected.`);

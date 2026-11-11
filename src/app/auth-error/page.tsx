@@ -50,6 +50,30 @@ function describeError(code: string | undefined): ErrorContent {
         message:
           "This sign-in method isn't set up yet. Please use another way to sign in.",
       };
+    case "state_mismatch":
+    case "state_not_found":
+    case "state_invalid":
+      return {
+        title: "That sign-in attempt expired",
+        message:
+          "We couldn't verify the sign-in request when the provider returned — it may have been started in another tab or left open too long. Nothing was changed on your account.",
+        hint: "Close any other sign-in tabs, then start again from the StudioSpace sign-in (or Connect) button. Make sure you complete the flow on the same address this app is open at.",
+      };
+    case "invalid_code":
+      return {
+        title: "The provider didn't complete the sign-in",
+        message:
+          "The authorization from Google/GitHub could not be exchanged, so no sign-in happened. This is usually temporary.",
+        hint: "Please try again. If it keeps failing, use your email and password to sign in.",
+      };
+    case "unable_to_link_account":
+    case "email_not_found":
+      return {
+        title: "We couldn't connect that provider account",
+        message:
+          "Accounts can only be connected when the provider confirms a verified email that matches your StudioSpace account.",
+        hint: "Verify your email with the provider, then connect it again from Connected Accounts on your profile page.",
+      };
     default:
       return {
         title: "Sign-in failed",
