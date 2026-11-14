@@ -74,6 +74,22 @@ export function AuthForm({ mode, redirectTarget, showReturnNotice }: AuthFormPro
 
   const afterAuth = redirectTarget ?? "/";
 
+  /**
+   * Carry the return target across the login/register switch so a visitor
+   * bounced from a gated page does not lose it by switching modes. Auth
+   * pages themselves are never carried as targets.
+   */
+  const carryNext =
+    redirectTarget &&
+    redirectTarget !== "/" &&
+    !redirectTarget.startsWith("/login") &&
+    !redirectTarget.startsWith("/register")
+      ? `?next=${encodeURIComponent(redirectTarget)}`
+      : "";
+  const switchHref = isRegister
+    ? `/login${carryNext}`
+    : `/register${carryNext}`;
+
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
@@ -259,7 +275,7 @@ export function AuthForm({ mode, redirectTarget, showReturnNotice }: AuthFormPro
       <p className="mt-6 text-center text-sm text-muted-foreground">
         {isRegister ? "Already have an account?" : "New to StudioSpace?"}{" "}
         <Link
-          href={isRegister ? "/login" : "/register"}
+          href={switchHref}
           className="font-medium text-foreground underline-offset-4 hover:underline"
         >
           {isRegister ? "Sign in" : "Create an account"}

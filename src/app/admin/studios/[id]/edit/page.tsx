@@ -34,14 +34,16 @@ export async function generateMetadata({
 export default async function AdminStudioEditPage({
   params,
 }: AdminStudioEditPageProps) {
+  const { id } = await params;
   const session = await getServerSession();
-  if (!session) redirect("/login");
+  if (!session) {
+    redirect(`/login?next=/admin/studios/${encodeURIComponent(id)}/edit`);
+  }
 
   if (!isAdminEmail(session.user.email)) {
     return <AdminAccessDenied />;
   }
 
-  const { id } = await params;
   // Server components read the database directly (same data the public
   // GET /api/studios/:id route serves).
   const studio = await findStudioById(id);

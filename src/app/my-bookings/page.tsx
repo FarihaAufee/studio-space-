@@ -16,7 +16,7 @@ export const metadata: Metadata = {
 /** Booking history with client-side status filtering, gated by the session. */
 export default async function MyBookingsPage() {
   const session = await getServerSession();
-  if (!session) redirect("/login");
+  if (!session) redirect("/login?next=/my-bookings");
 
   return (
     <main className="min-h-screen bg-background">

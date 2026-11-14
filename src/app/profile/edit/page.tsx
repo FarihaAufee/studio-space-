@@ -21,7 +21,7 @@ export const metadata: Metadata = {
  */
 export default async function ProfileEditPage() {
   const session = await getServerSession();
-  if (!session) redirect("/login");
+  if (!session) redirect("/login?next=/profile/edit");
 
   const user = session.user;
 

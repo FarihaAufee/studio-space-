@@ -17,7 +17,7 @@ export const metadata: Metadata = {
 /** Host dashboard for editing and deleting owned studio listings. */
 export default async function MyListingsPage() {
   const session = await getServerSession();
-  if (!session) redirect("/login");
+  if (!session) redirect("/login?next=/my-listings");
 
   // Hosts and admins manage listings here; customers are redirected to the
   // Become a Host onboarding.

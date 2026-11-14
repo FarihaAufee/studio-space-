@@ -10,9 +10,9 @@
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",
-    "@better-auth/mongo-adapter": "^1.7.15",
+    "@better-auth/mongo-adapter": "^1.7.23",
     "@shadcn/react": "^0.3.1",
-    "better-auth": "^1.7.15",
+    "better-auth": "^1.7.23",
     "class-variance-authority": "^0.7.1",
     "cloudinary": "^2.11.0",
     "cmdk": "^1.1.1",

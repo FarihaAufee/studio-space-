@@ -20,7 +20,7 @@ export const metadata: Metadata = {
  */
 export default async function ProfilePage() {
   const session = await getServerSession();
-  if (!session) redirect("/login");
+  if (!session) redirect("/login?next=/profile");
 
   return <ProfileView />;
 }

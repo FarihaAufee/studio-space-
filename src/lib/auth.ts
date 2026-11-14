@@ -4,17 +4,7 @@ import { nextCookies } from "better-auth/next-js";
 import { mongodbAdapter } from "better-auth/adapters/mongodb";
 import { mongoClient, mongoDb } from "@/lib/mongodb";
 
-/**
- * Origins the browser may call the auth API from. Better Auth's CSRF check
- * rejects every cookie-bearing POST (sign-out, change-password, …) whose
- * `Origin` header is not in this list, so it must cover every environment
- * the app is actually served from — not just BETTER_AUTH_URL.
- *
- * Sign-out used to fail with 403 INVALID_ORIGIN whenever the page origin
- * differed from BETTER_AUTH_URL (Next dev shifting to port 3001, or the
- * deployed Vercel domain), while sign-in kept working because it sends no
- * session cookie yet.
- */
+
 
 /** URL string → origin ("https://x.com/app" → "https://x.com"); null if invalid. */
 const toOrigin = (value: string | undefined) => {
@@ -26,9 +16,77 @@ const toOrigin = (value: string | undefined) => {
   }
 };
 
+
+/** This project's stable production deployment (matches the Google redirect registration). */
+const VERCEL_PRODUCTION_URL = "https://studio-space-ten.vercel.app";
+
+const isVercelProduction = process.env.VERCEL_ENV === "production";
+
+/** True for loopback / private-network hosts that must never become the production OAuth callback origin. */
+const isPrivateOrLocalHost = (host: string): boolean => {
+  const hostname = host.toLowerCase().replace(/:\d+$/, "").replace(/^\[|\]$/g, "");
+  if (hostname === "localhost" || hostname.endsWith(".localhost") || hostname.endsWith(".local")) return true;
+  if (hostname === "::1" || hostname.startsWith("fc") || hostname.startsWith("fd")) return true;
+  const ipv4 = hostname.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  if (!ipv4) return false;
+  const [a, b] = [Number(ipv4[1]), Number(ipv4[2])];
+  return (
+    a === 127 || // loopback
+    a === 10 || // RFC1918 10.0.0.0/8 (e.g. the 10.27.250.186 LAN IP)
+    (a === 172 && b >= 16 && b <= 31) || // RFC1918 172.16.0.0/12
+    (a === 192 && b === 168) || // RFC1918 192.168.0.0/16
+    (a === 169 && b === 254) // link-local
+  );
+};
+
+
+interface AuthBaseURLCandidate {
+  /** Human-readable source name, surfaced through `authDiagnostics`. */
+  source: string;
+  value: string | undefined;
+}
+
+const authBaseURLCandidates: AuthBaseURLCandidate[] = [
+  { source: "BETTER_AUTH_URL", value: process.env.BETTER_AUTH_URL },
+  {
+    source: "VERCEL_PROJECT_PRODUCTION_URL",
+    value: process.env.VERCEL_PROJECT_PRODUCTION_URL
+      ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+      : undefined,
+  },
+  {
+    source: "VERCEL_PRODUCTION_URL (hardcoded safety net)",
+    value: isVercelProduction ? VERCEL_PRODUCTION_URL : undefined,
+  },
+  {
+    source: "VERCEL_URL",
+    value: process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined,
+  },
+];
+
+const resolvedAuthBaseURL = authBaseURLCandidates
+  .map((candidate) => {
+    if (!candidate.value) return undefined;
+    try {
+      return { source: candidate.source, origin: new URL(candidate.value).origin };
+    } catch {
+      return undefined;
+    }
+  })
+  .find(
+    (candidate) =>
+      candidate !== undefined &&
+      !(isVercelProduction && isPrivateOrLocalHost(new URL(candidate.origin).host)),
+  );
+
+const authBaseURL = resolvedAuthBaseURL?.origin ?? "http://localhost:3000";
+
 const trustedOrigins = [
   // Explicitly configured auth URL (e.g. the production domain on Vercel).
   toOrigin(process.env.BETTER_AUTH_URL),
+
+  // The resolved OAuth base URL (covers the fallback chain above).
+  authBaseURL,
 
   // Vercel: the exact domain of the current deployment (covers every preview
   // deployment) and the project's stable production domain.
@@ -43,6 +101,9 @@ const trustedOrigins = [
 ].filter((origin): origin is string => Boolean(origin));
 
 export const auth = betterAuth({
+
+  baseURL: authBaseURL,
+
   database: mongodbAdapter(mongoDb, {
     client: mongoClient,
   }),
@@ -52,46 +113,17 @@ export const auth = betterAuth({
     minPasswordLength: 8,
   },
 
-  /**
-   * Account linking policy (Better Auth 1.7).
-   *
-   * Problem being solved: an existing Email/Password user who signs in with
-   * Google used to hit `account_not_linked`. Better Auth's implicit linking
-   * (link-account.mjs) refuses to auto-link unless BOTH sides are
-   * email-verified — the IdP claim (Google's signature-verified
-   * `email_verified`) AND the local user row (`requireLocalEmailVerified`).
-   * This app has no email-verification flow yet, so every password user has
-   * `emailVerified: false` and implicit linking was always refused.
-   *
-   * The safe fix is NOT to lower that flag (`requireLocalEmailVerified: false`
-   * is documented as deprecated — it lets an attacker who pre-registers an
-   * unverified password account at a victim's email have the victim's OAuth
-   * identity linked into the attacker-owned row). Instead we keep the strict
-   * implicit-linking defaults and surface an EXPLICIT linking flow in the
-   * profile page ("Connected accounts" → authClient.linkSocial()). The
-   * explicit path (`/link-social`) already requires authentication with the
-   * password first, so it safely relaxes the local-verified requirement while
-   * still demanding the provider's `emailVerified === true` and the SAME
-   * email (allowDifferentEmails: false). Once linked once, subsequent Google
-   * sign-ins match on the stored provider account and succeed directly.
-   */
+ 
   account: {
     accountLinking: {
       enabled: true,
-      // Only provider-email-verified claims count as ownership proof — never
-      // blanket-trust a provider by name.
       trustedProviders: [],
-      // A Google account with a different email must never silently attach to
-      // the signed-in user.
+
       allowDifferentEmails: false,
     },
   },
 
-  /**
-   * OAuth failures redirect here instead of /api/auth/error so users get a
-   * human-readable page (see src/app/auth-error/page.tsx) that explains
-   * `account_not_linked` and points them at the Connected Accounts UI.
-   */
+ 
   onAPIError: {
     errorURL: "/auth-error",
   },
@@ -100,19 +132,6 @@ export const auth = betterAuth({
     additionalFields: {
       phone: { type: "string", required: false },
       bio: { type: "string", required: false },
-      /**
-       * Role field for the StudioSpace multi-role system — "customer" (the
-       * default), "host", or "admin".
-       *
-       * Security: `input: false` blocks clients from setting the value
-       * through any Better Auth endpoint. New sign-ups receive the
-       * "customer" default; "host" is granted exclusively by the server
-       * after successful Become a Host validation (POST /api/hosts/apply)
-       * via a direct, session-verified database update; "admin" is only
-       * ever assigned manually or through the ADMIN_EMAILS env list
-       * (src/lib/admin.ts). A missing role on legacy accounts is treated
-       * as "customer" by src/lib/api-server.ts.
-       */
       role: {
         type: "string",
         required: false,
@@ -143,3 +162,29 @@ export const auth = betterAuth({
 
   plugins: [nextCookies()],
 });
+
+
+export const authDiagnostics = {
+  /** The origin every OAuth redirect_uri is built from. */
+  baseURL: authBaseURL,
+  /** Which candidate in the resolution order above won (or the fallback). */
+  source: resolvedAuthBaseURL?.source ?? "fallback (http://localhost:3000)",
+  isVercelProduction,
+  /**
+   * True only when a Vercel production deployment resolved to an origin
+   * OTHER than the registered production domain — the config mistake that
+   * guarantees `redirect_uri_mismatch` in production.
+   */
+  productionMismatch:
+    isVercelProduction && authBaseURL !== VERCEL_PRODUCTION_URL,
+  /** Whether each social provider has a full pair of credentials. */
+  providers: {
+    google: Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET),
+    github: Boolean(process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET),
+  },
+  /** Exact redirect_uri values to register in the provider consoles. */
+  expectedCallbacks: {
+    google: `${authBaseURL}/api/auth/callback/google`,
+    github: `${authBaseURL}/api/auth/callback/github`,
+  },
+} as const;

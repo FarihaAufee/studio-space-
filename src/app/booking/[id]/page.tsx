@@ -20,10 +20,9 @@ export const metadata: Metadata = {
 
 /** Single-booking detail page. Validates the id shape before going further. */
 export default async function BookingPage({ params }: BookingPageProps) {
-  const session = await getServerSession();
-  if (!session) redirect("/login");
-
   const { id } = await params;
+  const session = await getServerSession();
+  if (!session) redirect(`/login?next=/booking/${encodeURIComponent(id)}`);
   if (!/^[0-9a-fA-F]{24}$/.test(id)) notFound();
 
   return (

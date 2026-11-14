@@ -15,7 +15,7 @@ export const metadata: Metadata = {
 /** Admin studio management list. Same auth/ authorization gate as /admin. */
 export default async function AdminStudiosPage() {
   const session = await getServerSession();
-  if (!session) redirect("/login");
+  if (!session) redirect("/login?next=/admin/studios");
 
   if (!isAdminEmail(session.user.email)) {
     return <AdminAccessDenied />;

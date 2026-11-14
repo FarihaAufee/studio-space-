@@ -20,7 +20,7 @@ export const metadata: Metadata = {
  */
 export default async function BookingRequestsPage() {
   const session = await getServerSession();
-  if (!session) redirect("/login");
+  if (!session) redirect("/login?next=/booking-requests");
 
   return (
     <main className="min-h-screen bg-background">

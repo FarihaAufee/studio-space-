@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { cache } from "react";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import {
   ArrowLeft,
   Check,
@@ -14,6 +14,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { BookingCard } from "@/components/studios/booking-card";
 import { findStudioById } from "@/lib/db";
 import { getStudioImages } from "@/lib/studio-images";
+import { getServerSession } from "@/lib/session";
 import { StudioImage } from "@/components/studios/studio-image";
 import type { Studio } from "@/app/studios/studios";
 
@@ -66,6 +67,16 @@ export default async function StudioDetailsPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
+
+  // Studio details are members-only: unauthenticated visitors are sent to
+  // the login page with a return path, so a successful sign-in brings them
+  // straight back to this studio. Verified server-side against the Better
+  // Auth session — same contract as every other gated page.
+  const session = await getServerSession();
+  if (!session) {
+    redirect(`/login?next=/studios/${encodeURIComponent(id)}`);
+  }
+
   const studio = await getStudio(id);
 
   if (!studio) notFound();

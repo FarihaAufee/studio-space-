@@ -22,7 +22,7 @@ export const metadata: Metadata = {
  */
 export default async function AddStudioPage() {
   const session = await getServerSession();
-  if (!session) redirect("/login");
+  if (!session) redirect("/login?next=/add-studio");
 
   // Only hosts (and admins) can publish studios; customers are pointed at
   // the Become a Host onboarding first.

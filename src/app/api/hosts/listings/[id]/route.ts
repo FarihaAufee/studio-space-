@@ -28,26 +28,13 @@ export async function PUT(
     const auth = guard.auth;
     const { id } = await params;
 
-    // Existence first, then body validation — a request for a studio that
-    // is not there should always be a 404 regardless of payload quality.
+    // Existence first, then authorization, then body validation — a request
+    // for a studio that is not there should always be a 404, and a caller
+    // without rights to a studio must never get further than 403 regardless
+    // of payload quality.
     const doc = await findStudioDocById(id);
     if (!doc) {
       return jsonError(404, "This studio does not exist.");
-    }
-
-    let body: Record<string, unknown>;
-    try {
-      body = (await request.json()) as Record<string, unknown>;
-    } catch {
-      return jsonError(400, "Invalid request body.");
-    }
-
-    const parsed = parseStudioPayload(body);
-    if (!parsed.ok) {
-      return Response.json(
-        { success: false, message: parsed.message, errors: parsed.errors },
-        { status: 400 }
-      );
     }
 
     const ownerId = typeof doc.hostId === "string" ? doc.hostId : "";
@@ -63,6 +50,21 @@ export async function PUT(
       return jsonError(
         403,
         "You can only edit studios that you listed yourself."
+      );
+    }
+
+    let body: Record<string, unknown>;
+    try {
+      body = (await request.json()) as Record<string, unknown>;
+    } catch {
+      return jsonError(400, "Invalid request body.");
+    }
+
+    const parsed = parseStudioPayload(body);
+    if (!parsed.ok) {
+      return Response.json(
+        { success: false, message: parsed.message, errors: parsed.errors },
+        { status: 400 }
       );
     }
 
