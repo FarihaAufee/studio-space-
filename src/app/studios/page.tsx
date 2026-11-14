@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
+import { connection } from "next/server";
 import { SearchX } from "lucide-react";
 import { listStudios } from "@/lib/db";
 import type { Studio } from "@/app/studios/studios";
@@ -59,6 +60,11 @@ async function FilteredStudios({ query }: { query: StudiosQuery }) {
 
   let studios: Studio[];
   try {
+    // Render at request time: live studio data must not be captured into the
+    // prerendered shell (see nextjs.org/docs/messages/blocking-prerender-
+    // current-time). connection() also keeps any other request-time values
+    // in this route from being evaluated while prerendering.
+    await connection();
     // Server components read the database directly (same data the public
     // GET /api/studios route serves) — no self-HTTP fetch is needed.
     studios = await listStudios({
